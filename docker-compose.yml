@@ -29,6 +29,18 @@ services:
       retries: 10
       start_period: 10s
 
+  kamailio:
+    image: ghcr.io/kamailio/kamailio:6.1.5-bookworm
+    ports:
+      - "127.0.0.1:5060:5060/udp"
+      - "127.0.0.1:5060:5060/tcp"
+    healthcheck:
+      test: ["CMD", "kamcmd", "core.uptime"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
 volumes:
   postgres-data:
   redis-data:
