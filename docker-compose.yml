@@ -55,6 +55,40 @@ services:
       retries: 10
       start_period: 10s
 
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --dev --config /etc/livekit.yaml
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "127.0.0.1:7882:7882/udp"
+    volumes:
+      - ./docker/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7880/"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  livekit-sip:
+    image: livekit/sip:latest
+    command: --config /etc/livekit-sip.yaml
+    ports:
+      - "127.0.0.1:5062:5062/udp"
+      - "127.0.0.1:5062:5062/tcp"
+      - "127.0.0.1:10000-10099:10000-10099/udp"
+    volumes:
+      - ./docker/livekit-sip/livekit-sip.yaml:/etc/livekit-sip.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   redis-data:

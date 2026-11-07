@@ -1,0 +1,10 @@
+api_key: devkey
+api_secret: secret
+ws_url: ws://livekit:7880
+
+redis:
+  address: redis:6379
+
+sip_port: 5062
+rtp_port: 10000-10099
+use_external_ip: false
