@@ -34,22 +34,13 @@ services:
     ports:
       - "127.0.0.1:5060:5060/udp"
       - "127.0.0.1:5060:5060/tcp"
+    volumes:
+      - ./docker/kamailio/kamailio.cfg:/etc/kamailio/kamailio.cfg:ro
+    depends_on:
+      livekit-sip:
+        condition: service_started
     healthcheck:
       test: ["CMD", "kamcmd", "core.uptime"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-
-  rtpengine:
-    build: ./docker/rtpengine
-    ports:
-      - "127.0.0.1:2223:2223/udp"
-      - "127.0.0.1:30000-30099:30000-30099/udp"
-    volumes:
-      - ./docker/rtpengine/rtpengine.conf:/etc/rtpengine/rtpengine.conf:ro
-    healthcheck:
-      test: ["CMD", "rtpengine-ctl", "list", "numsessions"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -88,6 +79,20 @@ services:
         condition: service_healthy
       livekit:
         condition: service_healthy
+
+  rtpengine:
+    build: ./docker/rtpengine
+    ports:
+      - "127.0.0.1:2223:2223/udp"
+      - "127.0.0.1:30000-30099:30000-30099/udp"
+    volumes:
+      - ./docker/rtpengine/rtpengine.conf:/etc/rtpengine/rtpengine.conf:ro
+    healthcheck:
+      test: ["CMD", "rtpengine-ctl", "list", "numsessions"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   postgres-data:
