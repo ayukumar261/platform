@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+	"time"
+
+	"bridge/internal/clients"
 
 	"github.com/joho/godotenv"
+	"github.com/livekit/protocol/livekit"
 )
 
 type Configuration struct {
@@ -17,9 +22,24 @@ type Configuration struct {
 }
 
 func main() {
-	if _, err := loadConfiguration("../../.env"); err != nil {
+	configuration, err := loadConfiguration("../../.env")
+	if err != nil {
 		log.Fatal(err)
 	}
+
+	sipClient := clients.NewLiveKitSIPClient(
+		configuration.LiveKitURL,
+		configuration.LiveKitAPIKey,
+		configuration.LiveKitAPISecret,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_, err = sipClient.ListSIPInboundTrunk(ctx, &livekit.ListSIPInboundTrunkRequest{})
+	cancel()
+	if err != nil {
+		log.Fatalf("LiveKit SIP startup check failed: %v", err)
+	}
+	log.Print("LiveKit SIP startup check succeeded")
 }
 
 func loadConfiguration(environmentFile string) (Configuration, error) {
