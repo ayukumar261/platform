@@ -1,0 +1,11 @@
+{
+  "name": "bridge",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "go build -o build/bridge .",
+    "dev": "go run .",
+    "lint": "go vet ./...",
+    "format": "gofmt -w ."
+  }
+}
