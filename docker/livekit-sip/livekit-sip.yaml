@@ -1,10 +1,13 @@
-api_key: devkey
-api_secret: secret
+# Authentication
+api_key: dev-api-key
+api_secret: dev-api-secret
+
+# Networking
 ws_url: ws://livekit:7880
-
-redis:
-  address: redis:6379
-
 sip_port: 5062
 rtp_port: 10000-10099
 use_external_ip: false
+
+# Redis
+redis:
+  address: redis:6379
