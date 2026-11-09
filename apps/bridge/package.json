@@ -6,6 +6,7 @@
     "build": "go build -o build/bridge .",
     "dev": "go run .",
     "lint": "go vet ./...",
+    "test": "go test ./...",
     "format": "gofmt -w ."
   }
 }
