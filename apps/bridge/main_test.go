@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var liveKitVariables = []string{"LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"}
+var requiredVariables = []string{"LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"}
 
 var testConfiguration = Configuration{
 	LiveKitURL:       "ws://127.0.0.1:7880",
@@ -30,7 +30,7 @@ func setTestEnvironment(t *testing.T) {
 
 func clearTestEnvironment(t *testing.T) {
 	t.Helper()
-	for _, name := range liveKitVariables {
+	for _, name := range requiredVariables {
 		t.Setenv(name, "")
 		if err := os.Unsetenv(name); err != nil {
 			t.Fatal(err)
@@ -61,7 +61,7 @@ func TestLoadConfigurationWithoutEnvironmentFile(t *testing.T) {
 }
 
 func TestLoadConfigurationRequiresEveryVariable(t *testing.T) {
-	for _, name := range liveKitVariables {
+	for _, name := range requiredVariables {
 		for _, state := range []string{"unset", "empty", "whitespace"} {
 			t.Run(name+"/"+state, func(t *testing.T) {
 				setTestEnvironment(t)
@@ -94,7 +94,7 @@ func TestLoadConfigurationReportsAllMissingVariables(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for missing configuration")
 	}
-	for _, name := range liveKitVariables {
+	for _, name := range requiredVariables {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("error does not name %s", name)
 		}
@@ -164,14 +164,14 @@ func TestMainExitsOnMissingConfiguration(t *testing.T) {
 	if exitError, ok := err.(*exec.ExitError); !ok || exitError.ExitCode() != 1 {
 		t.Fatalf("expected exit code 1, got %v", err)
 	}
-	for _, name := range liveKitVariables {
+	for _, name := range requiredVariables {
 		if !strings.Contains(string(output), name) {
 			t.Errorf("startup error does not name %s", name)
 		}
 	}
 }
 
-func TestMainChecksLiveKit(t *testing.T) {
+func TestMainSetsUpInboundCalls(t *testing.T) {
 	for _, test := range []struct {
 		name        string
 		status      int
@@ -182,9 +182,9 @@ func TestMainChecksLiveKit(t *testing.T) {
 		wantLog     string
 	}{
 		{
-			name:    "success with no trunks",
+			name:    "success with no trunks or dispatch rules",
 			status:  http.StatusOK,
-			wantLog: "LiveKit SIP startup check succeeded",
+			wantLog: "LiveKit inbound setup succeeded",
 		},
 		{
 			name:     "invalid credentials",
@@ -208,7 +208,7 @@ func TestMainChecksLiveKit(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost || r.URL.Path != "/twirp/livekit.SIP/ListSIPInboundTrunk" {
+				if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/twirp/livekit.SIP/") {
 					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 					http.NotFound(w, r)
 					return
@@ -218,7 +218,7 @@ func TestMainChecksLiveKit(t *testing.T) {
 					return
 				}
 				if test.status == http.StatusOK {
-					// An empty protobuf response is a valid empty trunk list.
+					// An empty protobuf response is a valid reply to every list and create request.
 					w.Header().Set("Content-Type", "application/protobuf")
 				} else {
 					w.Header().Set("Content-Type", "application/json")
@@ -245,10 +245,10 @@ func TestMainChecksLiveKit(t *testing.T) {
 				if exitError, ok := err.(*exec.ExitError); !ok || exitError.ExitCode() != test.wantExit {
 					t.Fatalf("expected exit code %d, got %v: %s", test.wantExit, err, output)
 				}
-				if !strings.Contains(string(output), "LiveKit SIP startup check failed") {
+				if !strings.Contains(string(output), "LiveKit inbound setup failed") {
 					t.Errorf("missing startup failure context: %s", output)
 				}
-				if strings.Contains(string(output), "startup check succeeded") {
+				if strings.Contains(string(output), "inbound setup succeeded") {
 					t.Errorf("failed startup reported success: %s", output)
 				}
 			}
