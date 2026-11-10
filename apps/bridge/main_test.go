@@ -13,12 +13,14 @@ import (
 	"time"
 )
 
-var requiredVariables = []string{"LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"}
+var requiredVariables = []string{"LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "KAMAILIO_HOST", "KAMAILIO_PORT"}
 
 var testConfiguration = Configuration{
 	LiveKitURL:       "ws://127.0.0.1:7880",
 	LiveKitAPIKey:    "test-api-key",
 	LiveKitAPISecret: "test-api-secret",
+	KamailioHost:     "kamailio",
+	KamailioPort:     "5060",
 }
 
 func setTestEnvironment(t *testing.T) {
@@ -26,6 +28,8 @@ func setTestEnvironment(t *testing.T) {
 	t.Setenv("LIVEKIT_URL", testConfiguration.LiveKitURL)
 	t.Setenv("LIVEKIT_API_KEY", testConfiguration.LiveKitAPIKey)
 	t.Setenv("LIVEKIT_API_SECRET", testConfiguration.LiveKitAPISecret)
+	t.Setenv("KAMAILIO_HOST", testConfiguration.KamailioHost)
+	t.Setenv("KAMAILIO_PORT", testConfiguration.KamailioPort)
 }
 
 func clearTestEnvironment(t *testing.T) {
@@ -106,7 +110,7 @@ func TestLoadConfigurationFromFile(t *testing.T) {
 		t.Run(override, func(t *testing.T) {
 			clearTestEnvironment(t)
 			environmentFile := filepath.Join(t.TempDir(), ".env")
-			contents := "LIVEKIT_URL=ws://127.0.0.1:7880\nLIVEKIT_API_KEY=test-api-key\nLIVEKIT_API_SECRET=test-api-secret\n"
+			contents := "LIVEKIT_URL=ws://127.0.0.1:7880\nLIVEKIT_API_KEY=test-api-key\nLIVEKIT_API_SECRET=test-api-secret\nKAMAILIO_HOST=kamailio\nKAMAILIO_PORT=5060\n"
 			if err := os.WriteFile(environmentFile, []byte(contents), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -171,7 +175,7 @@ func TestMainExitsOnMissingConfiguration(t *testing.T) {
 	}
 }
 
-func TestMainSetsUpInboundCalls(t *testing.T) {
+func TestMainSetsUpCalls(t *testing.T) {
 	for _, test := range []struct {
 		name        string
 		status      int
@@ -184,7 +188,7 @@ func TestMainSetsUpInboundCalls(t *testing.T) {
 		{
 			name:    "success with no trunks or dispatch rules",
 			status:  http.StatusOK,
-			wantLog: "LiveKit inbound setup succeeded",
+			wantLog: "LiveKit outbound setup succeeded",
 		},
 		{
 			name:     "invalid credentials",
@@ -248,7 +252,7 @@ func TestMainSetsUpInboundCalls(t *testing.T) {
 				if !strings.Contains(string(output), "LiveKit inbound setup failed") {
 					t.Errorf("missing startup failure context: %s", output)
 				}
-				if strings.Contains(string(output), "inbound setup succeeded") {
+				if strings.Contains(string(output), "setup succeeded") {
 					t.Errorf("failed startup reported success: %s", output)
 				}
 			}
