@@ -1,0 +1,13 @@
+[Unit]
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/platform/hook.env
+ExecStart=/usr/local/bin/webhook -hooks /opt/platform/deploy/hooks.json -template -ip 0.0.0.0 -port 9000 -hotreload -verbose
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
