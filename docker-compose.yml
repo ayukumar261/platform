@@ -81,6 +81,7 @@ services:
         condition: service_healthy
 
   rtpengine:
+    image: ghcr.io/ayukumar261/platform-rtpengine:latest
     build: ./docker/rtpengine
     ports:
       - "127.0.0.1:2223:2223/udp"
@@ -93,6 +94,36 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  api:
+    image: ghcr.io/ayukumar261/platform-api:latest
+    profiles: ["apps"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  bridge:
+    image: ghcr.io/ayukumar261/platform-bridge:latest
+    profiles: ["apps"]
+    restart: on-failure
+    env_file:
+      - .env
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      KAMAILIO_HOST: kamailio
+      KAMAILIO_PORT: "5060"
+    depends_on:
+      livekit:
+        condition: service_healthy
+      livekit-sip:
+        condition: service_started
+      kamailio:
+        condition: service_started
 
 volumes:
   postgres-data:
