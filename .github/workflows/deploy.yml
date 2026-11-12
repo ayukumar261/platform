@@ -13,7 +13,11 @@ permissions:
   packages: write
 
 jobs:
+  CI:
+    uses: ./.github/workflows/ci.yml
+
   Deploy:
+    needs: CI
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

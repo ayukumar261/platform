@@ -1,13 +1,10 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/bridge/**"
-      - ".github/workflows/ci.yml"
+  workflow_call:
   pull_request:
     paths:
+      - "apps/api/**"
       - "apps/bridge/**"
       - ".github/workflows/ci.yml"
 
@@ -19,6 +16,26 @@ permissions:
   contents: read
 
 jobs:
+  API:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --filter api lint
+
   Bridge:
     runs-on: ubuntu-latest
     defaults:
