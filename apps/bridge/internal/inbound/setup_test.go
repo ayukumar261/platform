@@ -14,9 +14,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Constants
 const testTrunkID = "ST_test"
 
-// fakeLiveKit serves the LiveKit SIP API from memory and records the requests it receives.
 type fakeLiveKit struct {
 	t             *testing.T
 	trunks        []*livekit.SIPInboundTrunkInfo
@@ -69,6 +69,11 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// existingTrunks returns the inbound trunk.
+func existingTrunks() []*livekit.SIPInboundTrunkInfo {
+	return []*livekit.SIPInboundTrunkInfo{{SipTrunkId: testTrunkID, Name: trunkName}}
+}
+
 func setup(t *testing.T, fake *fakeLiveKit) error {
 	t.Helper()
 	fake.t = t
@@ -107,7 +112,7 @@ func TestSetupCreatesTrunkAndDispatchRule(t *testing.T) {
 
 func TestSetupKeepsExistingTrunkAndDispatchRule(t *testing.T) {
 	fake := &fakeLiveKit{
-		trunks:        []*livekit.SIPInboundTrunkInfo{{SipTrunkId: testTrunkID, Name: trunkName}},
+		trunks:        existingTrunks(),
 		dispatchRules: []*livekit.SIPDispatchRuleInfo{{Name: dispatchRuleName}},
 	}
 	if err := setup(t, fake); err != nil {
