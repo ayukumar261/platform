@@ -33,6 +33,8 @@ services:
     image: ghcr.io/kamailio/kamailio:6.1.5-bookworm
     environment:
       PUBLIC_IP_ADDRESS: ${PUBLIC_IP_ADDRESS:?}
+      TELNYX_TERMINATION_URI: ${TELNYX_TERMINATION_URI:?}
+      TWILIO_TERMINATION_URI: ${TWILIO_TERMINATION_URI:?}
     ports:
       - "${PUBLIC_IP_ADDRESS:?}:5060:5060/udp"
       - "${PUBLIC_IP_ADDRESS:?}:5060:5060/tcp"
