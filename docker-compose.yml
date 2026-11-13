@@ -41,6 +41,8 @@ services:
     depends_on:
       livekit-sip:
         condition: service_started
+      rtpengine:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "kamcmd", "core.uptime"]
       interval: 5s
@@ -85,9 +87,12 @@ services:
   rtpengine:
     image: ghcr.io/ayukumar261/platform-rtpengine:latest
     build: ./docker/rtpengine
+    command:
+      - --interface=internal/eth0
+      - --interface=external/eth0!${PUBLIC_IP_ADDRESS:?}
     ports:
       - "127.0.0.1:2223:2223/udp"
-      - "127.0.0.1:30000-30099:30000-30099/udp"
+      - "${PUBLIC_IP_ADDRESS:?}:30000-30099:30000-30099/udp"
     volumes:
       - ./docker/rtpengine/rtpengine.conf:/etc/rtpengine/rtpengine.conf:ro
     healthcheck:
