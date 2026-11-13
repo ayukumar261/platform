@@ -8,20 +8,21 @@ import (
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
-const trunkName = "outbound"
+const (
+	trunkName = "outbound"
+)
+
+// Carriers
+var carriers = []string{"telnyx", "twilio"}
 
 // TODO: Remove for PostgreSQL-backed phone numbers
 const phoneNumber = "+17627013110"
 
-// Setup makes sure LiveKit can place calls from phoneNumber through Kamailio.
+// Setup makes sure LiveKit has an outbound trunk for each carrier.
 //
-// There is only one step: find the outbound trunk, or create it if it is
-// missing. Outbound calls need no dispatch rule, because the room is chosen
-// when the call is placed.
-//
-// Setup only creates what is missing, so it is safe to call on every startup.
-// It does not update a trunk that already exists: to change it, delete it so
-// that Setup can create it again.
+// It is safe to call on every startup, because it only creates trunks that
+// are missing. On a trunk that already exists it only fixes the address. To
+// change anything else, delete the trunk so that Setup creates it again.
 //
 // Parameters:
 //   - ctx: stops the requests early if it is cancelled or times out
@@ -29,33 +30,37 @@ const phoneNumber = "+17627013110"
 //   - kamailioAddress: where LiveKit SIP sends calls, as "host:port"
 //
 // Returns:
-//   - the trunk ID, which is needed later to place a call
+//   - nil when every trunk exists, whether it was found or created
 //   - an error if LiveKit cannot be reached or rejects a request
-func Setup(ctx context.Context, sipClient *lksdk.SIPClient, kamailioAddress string) (string, error) {
-	// Find or create the trunk that sends our calls
-	trunkID, err := ensureTrunk(ctx, sipClient, kamailioAddress)
-	if err != nil {
-		return "", fmt.Errorf("ensure outbound trunk: %w", err)
+func Setup(ctx context.Context, sipClient *lksdk.SIPClient, kamailioAddress string) error {
+	// Find or create the trunk that sends our calls through each carrier
+	for _, carrier := range carriers {
+		if _, err := ensureTrunk(ctx, sipClient, carrier, kamailioAddress); err != nil {
+			return fmt.Errorf("ensure outbound trunk for %s: %w", carrier, err)
+		}
 	}
 
-	return trunkID, nil
+	return nil
 }
 
-// ensureTrunk returns the ID of the outbound trunk, creating the trunk first
-// if LiveKit does not have one yet.
+// ensureTrunk finds the carrier's outbound trunk, or creates it if missing.
 //
-// The trunk is recognised by its name, "outbound". Calls placed through it
-// are sent to Kamailio and show phoneNumber as the caller.
+// The trunk is found by its name, such as "outbound-telnyx". Its calls go to
+// Kamailio with the carrier's name in the X-Carrier header, which tells
+// Kamailio where to send them.
 //
 // Parameters:
 //   - ctx: stops the requests early if it is cancelled or times out
 //   - sipClient: the client used to talk to the LiveKit SIP API
+//   - carrier: the carrier that the trunk places calls through
 //   - kamailioAddress: where LiveKit SIP sends calls, as "host:port"
 //
 // Returns:
 //   - the trunk ID, whether the trunk was found or created
 //   - an error if LiveKit cannot be reached or rejects a request
-func ensureTrunk(ctx context.Context, sipClient *lksdk.SIPClient, kamailioAddress string) (string, error) {
+func ensureTrunk(ctx context.Context, sipClient *lksdk.SIPClient, carrier, kamailioAddress string) (string, error) {
+	name := trunkName + "-" + carrier
+
 	// Ask LiveKit for every outbound trunk
 	existing, err := sipClient.ListSIPOutboundTrunk(ctx, &livekit.ListSIPOutboundTrunkRequest{})
 	if err != nil {
@@ -64,17 +69,32 @@ func ensureTrunk(ctx context.Context, sipClient *lksdk.SIPClient, kamailioAddres
 
 	// Reuse the trunk if it already exists
 	for _, trunk := range existing.Items {
-		if trunk.Name == trunkName {
-			return trunk.SipTrunkId, nil
+		if trunk.Name != name {
+			continue
 		}
+
+		// Point the trunk at Kamailio if it points somewhere else
+		if trunk.Address != kamailioAddress {
+			_, err := sipClient.UpdateSIPOutboundTrunk(ctx, &livekit.UpdateSIPOutboundTrunkRequest{
+				SipTrunkId: trunk.SipTrunkId,
+				Action: &livekit.UpdateSIPOutboundTrunkRequest_Update{
+					Update: &livekit.SIPOutboundTrunkUpdate{Address: &kamailioAddress},
+				},
+			})
+			if err != nil {
+				return "", err
+			}
+		}
+		return trunk.SipTrunkId, nil
 	}
 
 	// Create a trunk that sends calls to Kamailio
 	created, err := sipClient.CreateSIPOutboundTrunk(ctx, &livekit.CreateSIPOutboundTrunkRequest{
 		Trunk: &livekit.SIPOutboundTrunkInfo{
-			Name:    trunkName,
+			Name:    name,
 			Address: kamailioAddress,
 			Numbers: []string{phoneNumber},
+			Headers: map[string]string{"X-Carrier": carrier},
 		},
 	})
 	if err != nil {

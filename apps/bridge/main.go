@@ -51,7 +51,7 @@ func main() {
 	// Prepare LiveKit for outbound calls
 	kamailioAddress := net.JoinHostPort(configuration.KamailioHost, configuration.KamailioPort)
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	_, err = outbound.Setup(ctx, sipClient, kamailioAddress)
+	err = outbound.Setup(ctx, sipClient, kamailioAddress)
 	cancel()
 	if err != nil {
 		log.Fatalf("LiveKit outbound setup failed: %v", err)
