@@ -20,7 +20,7 @@ var testConfiguration = Configuration{
 	LiveKitAPIKey:    "test-api-key",
 	LiveKitAPISecret: "test-api-secret",
 	KamailioHost:     "kamailio",
-	KamailioPort:     "5060",
+	KamailioPort:     "5070",
 }
 
 func setTestEnvironment(t *testing.T) {
@@ -110,7 +110,13 @@ func TestLoadConfigurationFromFile(t *testing.T) {
 		t.Run(override, func(t *testing.T) {
 			clearTestEnvironment(t)
 			environmentFile := filepath.Join(t.TempDir(), ".env")
-			contents := "LIVEKIT_URL=ws://127.0.0.1:7880\nLIVEKIT_API_KEY=test-api-key\nLIVEKIT_API_SECRET=test-api-secret\nKAMAILIO_HOST=kamailio\nKAMAILIO_PORT=5060\n"
+			contents := strings.Join([]string{
+				"LIVEKIT_URL=ws://127.0.0.1:7880",
+				"LIVEKIT_API_KEY=test-api-key",
+				"LIVEKIT_API_SECRET=test-api-secret",
+				"KAMAILIO_HOST=kamailio",
+				"KAMAILIO_PORT=5070",
+			}, "\n")
 			if err := os.WriteFile(environmentFile, []byte(contents), 0600); err != nil {
 				t.Fatal(err)
 			}

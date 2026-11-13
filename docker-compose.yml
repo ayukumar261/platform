@@ -31,9 +31,11 @@ services:
 
   kamailio:
     image: ghcr.io/kamailio/kamailio:6.1.5-bookworm
+    environment:
+      PUBLIC_IP_ADDRESS: ${PUBLIC_IP_ADDRESS:?}
     ports:
-      - "127.0.0.1:5060:5060/udp"
-      - "127.0.0.1:5060:5060/tcp"
+      - "${PUBLIC_IP_ADDRESS:?}:5060:5060/udp"
+      - "${PUBLIC_IP_ADDRESS:?}:5060:5060/tcp"
     volumes:
       - ./docker/kamailio/kamailio.cfg:/etc/kamailio/kamailio.cfg:ro
     depends_on:
@@ -116,7 +118,7 @@ services:
     environment:
       LIVEKIT_URL: ws://livekit:7880
       KAMAILIO_HOST: kamailio
-      KAMAILIO_PORT: "5060"
+      KAMAILIO_PORT: "5070"
     depends_on:
       livekit:
         condition: service_healthy
