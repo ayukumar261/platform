@@ -3,9 +3,13 @@ module bridge
 go 1.27.3
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
+	github.com/livekit/media-sdk v0.1.1
 	github.com/livekit/protocol v1.51.1-0.20260910121219-271d9cde3897
 	github.com/livekit/server-sdk-go/v2 v2.19.0
+	github.com/pion/webrtc/v4 v4.2.19
+	github.com/twitchtv/twirp v8.1.3+incompatible
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -15,6 +19,7 @@ require (
 	buf.build/go/protoyaml v0.7.0 // indirect
 	cel.dev/expr v0.25.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
+	github.com/at-wat/ebml-go v0.18.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
@@ -27,7 +32,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/cel-go v0.29.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/jxskiss/base62 v1.1.0 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
@@ -36,6 +40,7 @@ require (
 	github.com/livekit/mageutil v0.0.0-20250511045019-0f1ff63f7731 // indirect
 	github.com/livekit/mediatransportutil v0.0.0-20260821083140-f234b534b095 // indirect
 	github.com/livekit/psrpc v0.7.6 // indirect
+	github.com/mackerelio/go-osstat v0.2.8 // indirect
 	github.com/magefile/mage v1.17.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nats-io/nats.go v1.52.0 // indirect
@@ -57,14 +62,12 @@ require (
 	github.com/pion/stun/v3 v3.1.7 // indirect
 	github.com/pion/transport/v4 v4.1.0 // indirect
 	github.com/pion/turn/v5 v5.0.13 // indirect
-	github.com/pion/webrtc/v4 v4.2.19 // indirect
 	github.com/prometheus/client_golang v1.24.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/puzpuzpuz/xsync/v4 v4.5.0 // indirect
 	github.com/redis/go-redis/v9 v9.22.0 // indirect
-	github.com/twitchtv/twirp v8.1.3+incompatible // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/otel v1.45.0 // indirect
@@ -83,5 +86,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.83.2 // indirect
+	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
