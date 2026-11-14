@@ -13,3 +13,9 @@ rtc:
 # Redis
 redis:
   address: redis:6379
+
+# Webhooks
+webhook:
+  api_key: dev-api-key
+  urls:
+    - http://bridge:8080/livekit/webhook

@@ -126,6 +126,7 @@ services:
       LIVEKIT_URL: ws://livekit:7880
       KAMAILIO_HOST: kamailio
       KAMAILIO_PORT: "5070"
+      BRIDGE_PORT: "8080"
     depends_on:
       livekit:
         condition: service_healthy

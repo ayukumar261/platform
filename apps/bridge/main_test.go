@@ -1,26 +1,43 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
 
-var requiredVariables = []string{"LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "KAMAILIO_HOST", "KAMAILIO_PORT"}
+var requiredVariables = []string{
+	"LIVEKIT_URL",
+	"LIVEKIT_API_KEY",
+	"LIVEKIT_API_SECRET",
+	"KAMAILIO_HOST",
+	"KAMAILIO_PORT",
+	"CARTESIA_API_KEY",
+	"CARTESIA_INBOUND_AGENT_ID",
+	"CARTESIA_OUTBOUND_AGENT_ID",
+	"BRIDGE_PORT",
+}
 
 var testConfiguration = Configuration{
-	LiveKitURL:       "ws://127.0.0.1:7880",
-	LiveKitAPIKey:    "test-api-key",
-	LiveKitAPISecret: "test-api-secret",
-	KamailioHost:     "kamailio",
-	KamailioPort:     "5070",
+	LiveKitURL:              "ws://127.0.0.1:7880",
+	LiveKitAPIKey:           "test-api-key",
+	LiveKitAPISecret:        "test-api-secret",
+	KamailioHost:            "kamailio",
+	KamailioPort:            "5070",
+	CartesiaAPIKey:          "test-cartesia-key",
+	CartesiaInboundAgentID:  "test-inbound-agent",
+	CartesiaOutboundAgentID: "test-outbound-agent",
+	BridgePort:              "0",
 }
 
 func setTestEnvironment(t *testing.T) {
@@ -30,6 +47,10 @@ func setTestEnvironment(t *testing.T) {
 	t.Setenv("LIVEKIT_API_SECRET", testConfiguration.LiveKitAPISecret)
 	t.Setenv("KAMAILIO_HOST", testConfiguration.KamailioHost)
 	t.Setenv("KAMAILIO_PORT", testConfiguration.KamailioPort)
+	t.Setenv("CARTESIA_API_KEY", testConfiguration.CartesiaAPIKey)
+	t.Setenv("CARTESIA_INBOUND_AGENT_ID", testConfiguration.CartesiaInboundAgentID)
+	t.Setenv("CARTESIA_OUTBOUND_AGENT_ID", testConfiguration.CartesiaOutboundAgentID)
+	t.Setenv("BRIDGE_PORT", testConfiguration.BridgePort)
 }
 
 func clearTestEnvironment(t *testing.T) {
@@ -116,6 +137,10 @@ func TestLoadConfigurationFromFile(t *testing.T) {
 				"LIVEKIT_API_SECRET=test-api-secret",
 				"KAMAILIO_HOST=kamailio",
 				"KAMAILIO_PORT=5070",
+				"CARTESIA_API_KEY=test-cartesia-key",
+				"CARTESIA_INBOUND_AGENT_ID=test-inbound-agent",
+				"CARTESIA_OUTBOUND_AGENT_ID=test-outbound-agent",
+				"BRIDGE_PORT=0",
 			}, "\n")
 			if err := os.WriteFile(environmentFile, []byte(contents), 0600); err != nil {
 				t.Fatal(err)
@@ -181,58 +206,39 @@ func TestMainExitsOnMissingConfiguration(t *testing.T) {
 	}
 }
 
-func TestMainSetsUpCalls(t *testing.T) {
+func TestMainExitsWhenSetupFails(t *testing.T) {
 	for _, test := range []struct {
 		name        string
 		status      int
 		body        string
 		unavailable bool
 		hang        bool
-		wantExit    int
 		wantLog     string
 	}{
 		{
-			name:    "success with no trunks or dispatch rules",
-			status:  http.StatusOK,
-			wantLog: "LiveKit outbound setup succeeded",
-		},
-		{
-			name:     "invalid credentials",
-			status:   http.StatusUnauthorized,
-			body:     `{"code":"unauthenticated","msg":"invalid API credentials"}`,
-			wantExit: 1,
-			wantLog:  "invalid API credentials",
+			name:    "invalid credentials",
+			status:  http.StatusUnauthorized,
+			body:    `{"code":"unauthenticated","msg":"invalid API credentials"}`,
+			wantLog: "invalid API credentials",
 		},
 		{
 			name:        "server unavailable",
 			unavailable: true,
-			wantExit:    1,
 			wantLog:     "connection refused",
 		},
 		{
-			name:     "server timeout",
-			hang:     true,
-			wantExit: 1,
-			wantLog:  "context deadline exceeded",
+			name:    "server timeout",
+			hang:    true,
+			wantLog: "context deadline exceeded",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, "/twirp/livekit.SIP/") {
-					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
-					http.NotFound(w, r)
-					return
-				}
 				if test.hang {
 					<-r.Context().Done()
 					return
 				}
-				if test.status == http.StatusOK {
-					// An empty protobuf response is a valid reply to every list and create request.
-					w.Header().Set("Content-Type", "application/protobuf")
-				} else {
-					w.Header().Set("Content-Type", "application/json")
-				}
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(test.status)
 				if _, err := io.WriteString(w, test.body); err != nil {
 					t.Errorf("write response: %v", err)
@@ -247,20 +253,14 @@ func TestMainSetsUpCalls(t *testing.T) {
 			t.Setenv("LIVEKIT_URL", strings.Replace(server.URL, "http://", "ws://", 1))
 			started := time.Now()
 			output, err := runBridgeMain(t)
-			if test.wantExit == 0 {
-				if err != nil {
-					t.Fatalf("expected successful startup, got %v: %s", err, output)
-				}
-			} else {
-				if exitError, ok := err.(*exec.ExitError); !ok || exitError.ExitCode() != test.wantExit {
-					t.Fatalf("expected exit code %d, got %v: %s", test.wantExit, err, output)
-				}
-				if !strings.Contains(string(output), "LiveKit inbound setup failed") {
-					t.Errorf("missing startup failure context: %s", output)
-				}
-				if strings.Contains(string(output), "setup succeeded") {
-					t.Errorf("failed startup reported success: %s", output)
-				}
+			if exitError, ok := err.(*exec.ExitError); !ok || exitError.ExitCode() != 1 {
+				t.Fatalf("expected exit code 1, got %v: %s", err, output)
+			}
+			if !strings.Contains(string(output), "LiveKit inbound setup failed") {
+				t.Errorf("missing startup failure context: %s", output)
+			}
+			if strings.Contains(string(output), "setup succeeded") {
+				t.Errorf("failed startup reported success: %s", output)
 			}
 			if !strings.Contains(string(output), test.wantLog) {
 				t.Errorf("expected log containing %q, got: %s", test.wantLog, output)
@@ -272,27 +272,96 @@ func TestMainSetsUpCalls(t *testing.T) {
 	}
 }
 
+func TestMainServesWebhooksUntilStopped(t *testing.T) {
+	// Reply with empty protobuf, which suits every list and create request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/protobuf")
+	}))
+	t.Cleanup(server.Close)
+	setTestEnvironment(t)
+	t.Setenv("LIVEKIT_URL", strings.Replace(server.URL, "http://", "ws://", 1))
+
+	// Start the bridge and wait until it listens
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	command := bridgeMainCommand(ctx, t)
+	logs, err := command.StderrPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	lines := bufio.NewScanner(logs)
+	var output strings.Builder
+	var address string
+	for address == "" && lines.Scan() {
+		output.WriteString(lines.Text() + "\n")
+		_, address, _ = strings.Cut(lines.Text(), "Listening for LiveKit webhooks on ")
+	}
+	if address == "" {
+		t.Fatalf("the bridge did not start listening: %s", output.String())
+	}
+
+	// Check that the webhook rejects unsigned requests
+	_, port, err := net.SplitHostPort(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.Post("http://127.0.0.1:"+port+"/livekit/webhook", "application/webhook+json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for an unsigned webhook, got %d", response.StatusCode)
+	}
+
+	// Stop the bridge the way Docker does
+	if err := command.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	for lines.Scan() {
+		output.WriteString(lines.Text() + "\n")
+	}
+	if err := command.Wait(); err != nil {
+		t.Fatalf("expected a clean exit, got %v: %s", err, output.String())
+	}
+	for _, expected := range []string{"LiveKit inbound setup succeeded", "LiveKit outbound setup succeeded", "Bridge stopped"} {
+		if !strings.Contains(output.String(), expected) {
+			t.Errorf("expected log containing %q, got: %s", expected, output.String())
+		}
+	}
+}
+
 func TestBridgeMainProcess(t *testing.T) {
 	if os.Getenv("BRIDGE_TEST_MAIN") == "1" {
 		main()
 	}
 }
 
-func runBridgeMain(t *testing.T) ([]byte, error) {
+// bridgeMainCommand prepares a process that runs main, and stops it when ctx ends.
+func bridgeMainCommand(ctx context.Context, t *testing.T) *exec.Cmd {
 	t.Helper()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
 	command := exec.CommandContext(ctx, executable, "-test.run=^TestBridgeMainProcess$")
 	command.Dir = filepath.Join(t.TempDir(), "apps", "bridge")
 	if err := os.MkdirAll(command.Dir, 0700); err != nil {
 		t.Fatal(err)
 	}
 	command.Env = append(os.Environ(), "BRIDGE_TEST_MAIN=1")
-	output, err := command.CombinedOutput()
+	return command
+}
+
+// runBridgeMain runs main until it exits, and returns everything it logged.
+func runBridgeMain(t *testing.T) ([]byte, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	output, err := bridgeMainCommand(ctx, t).CombinedOutput()
 	if ctx.Err() != nil {
 		t.Fatalf("startup did not finish within ten seconds: %v: %s", ctx.Err(), output)
 	}
