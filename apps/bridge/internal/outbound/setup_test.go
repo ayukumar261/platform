@@ -147,7 +147,7 @@ func TestSetupUpdatesTrunkAddresses(t *testing.T) {
 }
 
 func TestSetupReportsFailingStep(t *testing.T) {
-	// Closing the server first makes the very first request fail.
+	// Close the server first, so that the very first request fails
 	server := httptest.NewServer(http.NotFoundHandler())
 	server.Close()
 
