@@ -30,17 +30,20 @@ const phoneNumber = "+17627013110"
 //   - kamailioAddress: where LiveKit SIP sends calls, as "host:port"
 //
 // Returns:
-//   - nil when every trunk exists, whether it was found or created
+//   - each carrier's trunk ID, keyed by carrier, such as "telnyx"
 //   - an error if LiveKit cannot be reached or rejects a request
-func Setup(ctx context.Context, sipClient *lksdk.SIPClient, kamailioAddress string) error {
+func Setup(ctx context.Context, sipClient *lksdk.SIPClient, kamailioAddress string) (map[string]string, error) {
 	// Find or create the trunk that sends our calls through each carrier
+	trunkIDs := make(map[string]string)
 	for _, carrier := range carriers {
-		if _, err := ensureTrunk(ctx, sipClient, carrier, kamailioAddress); err != nil {
-			return fmt.Errorf("ensure outbound trunk for %s: %w", carrier, err)
+		trunkID, err := ensureTrunk(ctx, sipClient, carrier, kamailioAddress)
+		if err != nil {
+			return nil, fmt.Errorf("ensure outbound trunk for %s: %w", carrier, err)
 		}
+		trunkIDs[carrier] = trunkID
 	}
 
-	return nil
+	return trunkIDs, nil
 }
 
 // ensureTrunk finds the carrier's outbound trunk, or creates it if missing.

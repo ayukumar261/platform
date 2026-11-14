@@ -87,7 +87,7 @@ func existingTrunks(address string) []*livekit.SIPOutboundTrunkInfo {
 	return trunks
 }
 
-func setup(t *testing.T, fake *fakeLiveKit) error {
+func setup(t *testing.T, fake *fakeLiveKit) (map[string]string, error) {
 	t.Helper()
 	fake.t = t
 	server := httptest.NewServer(fake)
@@ -99,7 +99,8 @@ func setup(t *testing.T, fake *fakeLiveKit) error {
 
 func TestSetupCreatesTrunks(t *testing.T) {
 	fake := &fakeLiveKit{}
-	if err := setup(t, fake); err != nil {
+	trunkIDs, err := setup(t, fake)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,11 +116,20 @@ func TestSetupCreatesTrunks(t *testing.T) {
 			t.Errorf("unexpected headers for %s: %v", carrier, trunk.Headers)
 		}
 	}
+
+	expectedTrunkIDs := map[string]string{
+		"telnyx": "ST_outbound-telnyx",
+		"twilio": "ST_outbound-twilio",
+	}
+	if !maps.Equal(trunkIDs, expectedTrunkIDs) {
+		t.Errorf("expected trunk IDs %v, got %v", expectedTrunkIDs, trunkIDs)
+	}
 }
 
 func TestSetupKeepsExistingTrunks(t *testing.T) {
 	fake := &fakeLiveKit{trunks: existingTrunks(testKamailioAddress)}
-	if err := setup(t, fake); err != nil {
+	trunkIDs, err := setup(t, fake)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -127,11 +137,19 @@ func TestSetupKeepsExistingTrunks(t *testing.T) {
 	if !slices.Equal(fake.calls, expected) {
 		t.Errorf("expected calls %v, got %v", expected, fake.calls)
 	}
+
+	expectedTrunkIDs := map[string]string{
+		"telnyx": "ST_outbound-telnyx",
+		"twilio": "ST_outbound-twilio",
+	}
+	if !maps.Equal(trunkIDs, expectedTrunkIDs) {
+		t.Errorf("expected trunk IDs %v, got %v", expectedTrunkIDs, trunkIDs)
+	}
 }
 
 func TestSetupUpdatesTrunkAddresses(t *testing.T) {
 	fake := &fakeLiveKit{trunks: existingTrunks("kamailio:5060")}
-	if err := setup(t, fake); err != nil {
+	if _, err := setup(t, fake); err != nil {
 		t.Fatal(err)
 	}
 
@@ -152,7 +170,7 @@ func TestSetupReportsFailingStep(t *testing.T) {
 	server.Close()
 
 	sipClient := lksdk.NewSIPClient(server.URL, "test-api-key", "test-api-secret")
-	err := Setup(context.Background(), sipClient, testKamailioAddress)
+	_, err := Setup(context.Background(), sipClient, testKamailioAddress)
 	if err == nil || !strings.Contains(err.Error(), "ensure outbound trunk for telnyx") {
 		t.Fatalf("expected an outbound trunk error, got %v", err)
 	}
