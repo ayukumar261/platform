@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Begin a builder stage from base image
-FROM golang:1.27-bookworm AS builder
+FROM golang:1.27-trixie AS builder
 
 # Install the C libraries for encoding Opus and resampling audio
 RUN apt-get update \
@@ -20,7 +20,7 @@ COPY . .
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/bridge .
 
 # Begin a runner stage from the same Debian release as the builder
-FROM debian:bookworm-slim AS runner
+FROM debian:trixie-slim AS runner
 
 # Install the audio libraries, and the certificates for connecting to Cartesia
 RUN apt-get update \
