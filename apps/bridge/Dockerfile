@@ -3,6 +3,11 @@
 # Begin a builder stage from base image
 FROM golang:1.27-bookworm AS builder
 
+# Install the C libraries for encoding Opus and resampling audio
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends libopus-dev libopusfile-dev libsoxr-dev pkg-config \
+ && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /src
 
@@ -10,12 +15,20 @@ WORKDIR /src
 COPY go.* ./
 RUN go mod download
 
-# Build a static binary
+# Build a binary that links the audio libraries
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bridge .
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/bridge .
 
-# Begin a runner stage from a minimal base image that runs as a non-root user
-FROM gcr.io/distroless/static-debian12:nonroot AS runner
+# Begin a runner stage from the same Debian release as the builder
+FROM debian:bookworm-slim AS runner
+
+# Install the audio libraries, and the certificates for connecting to Cartesia
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends libopus0 libopusfile0 libsoxr0 ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# Run as a non-root user
+USER nobody:nogroup
 
 # Copy the compiled binary
 COPY --from=builder /out/bridge /usr/local/bin/bridge
