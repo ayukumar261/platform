@@ -26,6 +26,7 @@ var requiredVariables = []string{
 	"CARTESIA_INBOUND_AGENT_ID",
 	"CARTESIA_OUTBOUND_AGENT_ID",
 	"BRIDGE_PORT",
+	"BRIDGE_API_TOKEN",
 }
 
 var testConfiguration = Configuration{
@@ -38,6 +39,7 @@ var testConfiguration = Configuration{
 	CartesiaInboundAgentID:  "test-inbound-agent",
 	CartesiaOutboundAgentID: "test-outbound-agent",
 	BridgePort:              "0",
+	BridgeAPIToken:          "test-bridge-token",
 }
 
 func setTestEnvironment(t *testing.T) {
@@ -51,6 +53,7 @@ func setTestEnvironment(t *testing.T) {
 	t.Setenv("CARTESIA_INBOUND_AGENT_ID", testConfiguration.CartesiaInboundAgentID)
 	t.Setenv("CARTESIA_OUTBOUND_AGENT_ID", testConfiguration.CartesiaOutboundAgentID)
 	t.Setenv("BRIDGE_PORT", testConfiguration.BridgePort)
+	t.Setenv("BRIDGE_API_TOKEN", testConfiguration.BridgeAPIToken)
 }
 
 func clearTestEnvironment(t *testing.T) {
@@ -141,6 +144,7 @@ func TestLoadConfigurationFromFile(t *testing.T) {
 				"CARTESIA_INBOUND_AGENT_ID=test-inbound-agent",
 				"CARTESIA_OUTBOUND_AGENT_ID=test-outbound-agent",
 				"BRIDGE_PORT=0",
+				"BRIDGE_API_TOKEN=test-bridge-token",
 			}, "\n")
 			if err := os.WriteFile(environmentFile, []byte(contents), 0600); err != nil {
 				t.Fatal(err)
@@ -297,7 +301,7 @@ func TestMainServesWebhooksUntilStopped(t *testing.T) {
 	var address string
 	for address == "" && lines.Scan() {
 		output.WriteString(lines.Text() + "\n")
-		_, address, _ = strings.Cut(lines.Text(), "Listening for LiveKit webhooks on ")
+		_, address, _ = strings.Cut(lines.Text(), "Listening for HTTP requests on ")
 	}
 	if address == "" {
 		t.Fatalf("the bridge did not start listening: %s", output.String())
@@ -315,6 +319,16 @@ func TestMainServesWebhooksUntilStopped(t *testing.T) {
 	response.Body.Close()
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected status 401 for an unsigned webhook, got %d", response.StatusCode)
+	}
+
+	// Check that private outbound requests also require authentication
+	response, err = http.Post("http://127.0.0.1:"+port+"/call", "application/json", strings.NewReader(`{"to":"+15551234567"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected status 401 for an unsigned call request, got %d", response.StatusCode)
 	}
 
 	// Stop the bridge the way Docker does
