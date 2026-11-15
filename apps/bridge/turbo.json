@@ -5,7 +5,18 @@
       "outputs": ["build/**"]
     },
     "dev": {
-      "passThroughEnv": ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"]
+      "passThroughEnv": [
+        "LIVEKIT_URL",
+        "LIVEKIT_API_KEY",
+        "LIVEKIT_API_SECRET",
+        "KAMAILIO_HOST",
+        "KAMAILIO_PORT",
+        "BRIDGE_PORT",
+        "BRIDGE_API_TOKEN",
+        "CARTESIA_API_KEY",
+        "CARTESIA_INBOUND_AGENT_ID",
+        "CARTESIA_OUTBOUND_AGENT_ID"
+      ]
     },
     "test": {}
   }
