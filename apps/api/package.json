@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "dev": "node --watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "node --env-file-if-exists=../../.env --watch src/index.ts",
     "lint": "tsc --noEmit",
-    "test": "node --test",
+    "test": "node --test 'src/**/*.test.ts'",
     "format": "prettier --write \"src/**/*.ts\""
   },
   "dependencies": {
