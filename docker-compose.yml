@@ -108,9 +108,15 @@ services:
     image: ghcr.io/ayukumar261/platform-api:latest
     profiles: ["apps"]
     restart: unless-stopped
+    environment:
+      API_PORT: "3000"
+      BRIDGE_API_TOKEN: ${BRIDGE_API_TOKEN:?}
+      BRIDGE_URL: http://bridge:8080
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
+      bridge:
+        condition: service_started
       postgres:
         condition: service_healthy
       redis:
@@ -127,6 +133,7 @@ services:
       KAMAILIO_HOST: kamailio
       KAMAILIO_PORT: "5070"
       BRIDGE_PORT: "8080"
+      BRIDGE_API_TOKEN: ${BRIDGE_API_TOKEN:?}
     depends_on:
       livekit:
         condition: service_healthy
