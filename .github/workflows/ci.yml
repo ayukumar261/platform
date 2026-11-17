@@ -36,6 +36,12 @@ jobs:
       - name: Type check
         run: pnpm --filter api lint
 
+      - name: Test
+        run: pnpm --filter api test
+
+      - name: Build
+        run: pnpm --filter api build
+
   Bridge:
     runs-on: ubuntu-latest
     defaults:
