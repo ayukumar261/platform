@@ -4,6 +4,9 @@
     "build": {
       "outputs": ["dist/**"]
     },
+    "dev": {
+      "passThroughEnv": ["API_PORT", "BRIDGE_URL", "BRIDGE_API_TOKEN"]
+    },
     "test": {}
   }
 }
