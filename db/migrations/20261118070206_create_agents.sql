@@ -1,0 +1,2 @@
+-- Create "agents" table
+CREATE TABLE "agents" ("id" uuid NOT NULL DEFAULT uuidv7(), "name" text NOT NULL, "provider" text NOT NULL, "provider_agent_id" text NOT NULL, "created_at" timestamptz NOT NULL DEFAULT now(), "updated_at" timestamptz NOT NULL DEFAULT now(), PRIMARY KEY ("id"), CONSTRAINT "agents_provider_provider_agent_id_key" UNIQUE ("provider", "provider_agent_id"), CONSTRAINT "agents_provider_check" CHECK (provider = 'cartesia'::text));

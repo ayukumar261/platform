@@ -16,6 +16,19 @@ services:
       retries: 10
       start_period: 10s
 
+  atlas:
+    image: arigaio/atlas:1.4.0-community
+    command:
+      - migrate
+      - apply
+      - --url=postgres://postgres:postgres@postgres:5432/postgres?search_path=public&sslmode=disable
+      - --dir=file:///migrations
+    volumes:
+      - ./db/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   redis:
     image: redis:8-alpine
     ports:
@@ -117,6 +130,8 @@ services:
     depends_on:
       bridge:
         condition: service_started
+      atlas:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
