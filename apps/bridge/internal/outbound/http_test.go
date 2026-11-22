@@ -14,6 +14,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// Constants
+const callBody = `{"to":"+15551234567","provider":"cartesia","providerAgentId":"agent_123"}`
+
 // callRequest prepares a private request without contacting a carrier.
 //
 // Parameters:
@@ -44,7 +47,7 @@ func TestHandlerAcceptsCallAndKeepsItAfterRequestEnds(t *testing.T) {
 
 	// Accept the request before the conversation finishes
 	requestContext, cancelRequest := context.WithCancel(t.Context())
-	request := callRequest(`{"to":"+15551234567"}`).WithContext(requestContext)
+	request := callRequest(callBody).WithContext(requestContext)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusAccepted {
@@ -63,7 +66,8 @@ func TestHandlerAcceptsCallAndKeepsItAfterRequestEnds(t *testing.T) {
 	}
 	select {
 	case call := <-started:
-		if call.CallID != accepted.CallID || call.To != "+15551234567" {
+		expected := Request{CallID: accepted.CallID, To: "+15551234567", Provider: "cartesia", ProviderAgentID: "agent_123"}
+		if call != expected {
 			t.Fatalf("unexpected dial request: %+v", call)
 		}
 	case <-time.After(time.Second):
@@ -119,6 +123,10 @@ func TestHandlerRejectsRequestsBeforeDialing(t *testing.T) {
 		{name: "long number", body: `{"to":"+1234567890123456"}`, status: 400},
 		{name: "number suffix", body: `{"to":"+15551234567\n"}`, status: 400},
 		{name: "SIP address", body: `{"to":"sip:someone@example.com"}`, status: 400},
+		{name: "missing provider", body: `{"to":"+15551234567","providerAgentId":"agent_123"}`, status: 400},
+		{name: "blank provider", body: `{"to":"+15551234567","provider":" ","providerAgentId":"agent_123"}`, status: 400},
+		{name: "missing provider agent ID", body: `{"to":"+15551234567","provider":"cartesia"}`, status: 400},
+		{name: "blank provider agent ID", body: `{"to":"+15551234567","provider":"cartesia","providerAgentId":" "}`, status: 400},
 		{name: "unknown field", body: `{"to":"+15551234567","carrier":"telnyx"}`, status: 400},
 		{name: "trailing JSON", body: `{"to":"+15551234567"} {}`, status: 400},
 		{name: "trailing garbage", body: `{"to":"+15551234567"} garbage`, status: 400},
@@ -172,7 +180,7 @@ func TestHandlerRejectsWorkAfterShutdownOrCancellation(t *testing.T) {
 				cancel()
 			}
 			response := httptest.NewRecorder()
-			handler.ServeHTTP(response, callRequest(`{"to":"+15551234567"}`))
+			handler.ServeHTTP(response, callRequest(callBody))
 			handler.Shutdown()
 			if response.Code != http.StatusServiceUnavailable || called {
 				t.Fatalf("expected 503 without dialing, got %d, called=%v", response.Code, called)
@@ -192,7 +200,7 @@ func TestHandlerReleasesFailedCallsAndAssignsDistinctIDs(t *testing.T) {
 	})
 	for range 2 {
 		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, callRequest(`{"to":"+15551234567"}`))
+		handler.ServeHTTP(response, callRequest(callBody))
 		if response.Code != http.StatusAccepted {
 			t.Fatalf("unexpected status %d", response.Code)
 		}
@@ -209,7 +217,7 @@ func TestHandlerWithoutTokenFailsClosed(t *testing.T) {
 		return nil
 	})
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, callRequest(`{"to":"+15551234567"}`))
+	handler.ServeHTTP(response, callRequest(callBody))
 	handler.Shutdown()
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("unexpected status %d", response.Code)

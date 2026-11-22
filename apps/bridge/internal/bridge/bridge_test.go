@@ -92,8 +92,8 @@ func TestDialUsesTwilioAndPreservesAcceptedCallID(t *testing.T) {
 			return nil, failed
 		},
 	}
-	bridge := New(calls, nil, "inbound-agent", "outbound-agent", map[string]string{"twilio": "ST_twilio"})
-	request := outbound.Request{CallID: "test-call", To: "+15551234567"}
+	bridge := New(calls, fakeAgent(nil), "inbound-agent", map[string]string{"twilio": "ST_twilio"})
+	request := outbound.Request{CallID: "test-call", To: "+15551234567", Provider: "test", ProviderAgentID: "outbound-agent"}
 	if err := bridge.Dial(t.Context(), "twilio", request); !errors.Is(err, failed) {
 		t.Fatalf("expected the dial failure, got %v", err)
 	}
@@ -109,9 +109,23 @@ func TestDialRejectsUnknownCarrierBeforeDialing(t *testing.T) {
 			return nil, nil
 		},
 	}
-	bridge := New(calls, nil, "inbound-agent", "outbound-agent", map[string]string{"twilio": "ST_twilio"})
-	if err := bridge.Dial(t.Context(), "unknown", outbound.Request{}); err == nil {
+	bridge := New(calls, fakeAgent(nil), "inbound-agent", map[string]string{"twilio": "ST_twilio"})
+	if err := bridge.Dial(t.Context(), "unknown", outbound.Request{Provider: "test"}); err == nil {
 		t.Fatal("expected an error for an unknown carrier")
+	}
+}
+
+func TestDialRejectsUnknownProviderBeforeDialing(t *testing.T) {
+	calls := fakeCalls{
+		dial: func(context.Context, telephony.OutboundRequest) (telephony.Call, error) {
+			t.Fatal("an unknown provider must not start a call")
+			return nil, nil
+		},
+	}
+	bridge := New(calls, fakeAgent(nil), "inbound-agent", map[string]string{"twilio": "ST_twilio"})
+	request := outbound.Request{CallID: "test-call", To: "+15551234567", Provider: "unknown", ProviderAgentID: "outbound-agent"}
+	if err := bridge.Dial(t.Context(), "twilio", request); err == nil {
+		t.Fatal("expected an error for an unknown provider")
 	}
 }
 
@@ -150,12 +164,12 @@ func TestCallsUseMatchingAgentAndHangUpIfAgentSetupFails(t *testing.T) {
 				}
 				return nil, failed
 			})
-			bridge := New(calls, provider, "inbound-agent", "outbound-agent", map[string]string{"twilio": "ST_twilio"})
+			bridge := New(calls, provider, "inbound-agent", map[string]string{"twilio": "ST_twilio"})
 			var err error
 			if direction == "inbound" {
 				err = bridge.Answer(t.Context(), incoming)
 			} else {
-				err = bridge.Dial(t.Context(), "twilio", outbound.Request{CallID: "test-call", To: "+15551234567"})
+				err = bridge.Dial(t.Context(), "twilio", outbound.Request{CallID: "test-call", To: "+15551234567", Provider: "test", ProviderAgentID: "outbound-agent"})
 			}
 			if !errors.Is(err, failed) || !ended {
 				t.Fatalf("expected an agent failure and hangup, got %v, ended=%v", err, ended)

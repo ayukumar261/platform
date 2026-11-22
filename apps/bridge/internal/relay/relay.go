@@ -23,14 +23,14 @@ var AudioFormat = agents.AudioFormat{Encoding: agents.PCM16LE, SampleRate: 16000
 //  3. Act on the agent's events until the call or the session ends.
 //
 // When the agent ends the conversation, Connect lets its last words play before
-// hanging up.
+// hanging up. onTranscript runs on the conversation's goroutine, so it must
+// return quickly.
 //
 // Parameters:
 //   - ctx: ends the conversation early if it is cancelled
 //   - call: the answered phone call
 //   - session: an unstarted session configured with AudioFormat
-//   - onTranscript: receives each finished turn, or nil to ignore them. It
-//     runs on the conversation's goroutine, so it must return quickly.
+//   - onTranscript: receives each finished turn, or nil to ignore them
 //
 // Returns:
 //   - nil when the call or the agent ends normally

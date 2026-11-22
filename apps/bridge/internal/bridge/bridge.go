@@ -14,11 +14,10 @@ import (
 )
 
 type Bridge struct {
-	calls           telephony.Service
-	agents          agents.Provider
-	inboundAgentID  string
-	outboundAgentID string
-	trunkIDs        map[string]string
+	calls          telephony.Service
+	agents         agents.Provider
+	inboundAgentID string
+	trunkIDs       map[string]string
 }
 
 // New prepares the bridge for inbound and outbound calls without starting a call.
@@ -27,18 +26,16 @@ type Bridge struct {
 //   - calls: attaches incoming calls and dials outgoing calls
 //   - provider: creates the agent session for each call
 //   - inboundAgentID: the agent that answers incoming calls
-//   - outboundAgentID: the agent that speaks on outgoing calls
 //   - trunkIDs: each carrier's outbound trunk ID, prepared during startup
 //
 // Returns:
 //   - a bridge ready to answer and dial calls
-func New(calls telephony.Service, provider agents.Provider, inboundAgentID, outboundAgentID string, trunkIDs map[string]string) *Bridge {
+func New(calls telephony.Service, provider agents.Provider, inboundAgentID string, trunkIDs map[string]string) *Bridge {
 	return &Bridge{
-		calls:           calls,
-		agents:          provider,
-		inboundAgentID:  inboundAgentID,
-		outboundAgentID: outboundAgentID,
-		trunkIDs:        trunkIDs,
+		calls:          calls,
+		agents:         provider,
+		inboundAgentID: inboundAgentID,
+		trunkIDs:       trunkIDs,
 	}
 }
 
@@ -63,21 +60,24 @@ func (b *Bridge) Answer(ctx context.Context, request telephony.InboundRequest) e
 	return b.talk(ctx, call, b.inboundAgentID)
 }
 
-// Dial calls a number through a carrier, connects the outbound agent, and
+// Dial calls a number through a carrier, connects the requested agent, and
 // returns when the call ends.
 //
 // Parameters:
 //   - ctx: hangs up early if it is cancelled
 //   - carrier: the carrier to call through, such as "telnyx"
-//   - request: the accepted call ID and destination number
+//   - request: the accepted call ID, destination number, and agent
 //
 // Returns:
 //   - nil when the call ends normally
-//   - an error if nobody answers or the call fails
+//   - an error if the carrier or provider is unknown, or the call fails
 func (b *Bridge) Dial(ctx context.Context, carrier string, request outbound.Request) error {
 	trunkID, ok := b.trunkIDs[carrier]
 	if !ok {
 		return fmt.Errorf("unknown carrier %q", carrier)
+	}
+	if request.Provider != b.agents.Name() {
+		return fmt.Errorf("unknown provider %q", request.Provider)
 	}
 
 	// Call the number from a new room, giving up if nobody answers in time
@@ -92,7 +92,7 @@ func (b *Bridge) Dial(ctx context.Context, carrier string, request outbound.Requ
 		return fmt.Errorf("dial outbound call: %w", err)
 	}
 
-	return b.talk(ctx, call, b.outboundAgentID)
+	return b.talk(ctx, call, request.ProviderAgentID)
 }
 
 // talk starts an agent session on a call, and returns when the call ends.

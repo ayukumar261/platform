@@ -21,8 +21,10 @@ import (
 var phonePattern = regexp.MustCompile(`^\+[1-9][0-9]{1,14}$`)
 
 type Request struct {
-	CallID string
-	To     string
+	CallID          string
+	To              string
+	Provider        string
+	ProviderAgentID string
 }
 
 type Handler struct {
@@ -95,7 +97,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	var body struct {
-		To string `json:"to"`
+		To              string `json:"to"`
+		Provider        string `json:"provider"`
+		ProviderAgentID string `json:"providerAgentId"`
 	}
 	err = decoder.Decode(&body)
 	if err == nil {
@@ -112,7 +116,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &tooLarge) {
 			writeError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "Keep the request body within 4 KB.")
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid_request", "Provide one JSON object containing only to.")
+			writeError(w, http.StatusBadRequest, "invalid_request", "Provide one JSON object containing only to, provider, and providerAgentId.")
 		}
 		return
 	}
@@ -123,8 +127,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Require the agent that talks on the call
+	if strings.TrimSpace(body.Provider) == "" || strings.TrimSpace(body.ProviderAgentID) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_agent", "Provide provider and providerAgentId.")
+		return
+	}
+
 	// Register the call before replying or allowing shutdown to wait
-	request := Request{CallID: uuid.NewString(), To: body.To}
+	request := Request{CallID: uuid.NewString(), To: body.To, Provider: body.Provider, ProviderAgentID: body.ProviderAgentID}
 	h.mu.Lock()
 	if h.closing || h.running.Err() != nil {
 		h.mu.Unlock()
