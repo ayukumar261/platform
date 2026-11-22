@@ -1,3 +1,9 @@
+export interface CallRequest {
+  to: string;
+  provider: string;
+  providerAgentId: string;
+}
+
 export interface Bridge {
-  createCall(to: string): Promise<{ callId: string }>;
+  createCall(request: CallRequest): Promise<{ callId: string }>;
 }

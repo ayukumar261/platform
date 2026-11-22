@@ -3,6 +3,9 @@ import { test } from "node:test";
 import { BadRequestError } from "../../lib/errors/index.ts";
 import { parseCreateCallRequest } from "./schema.ts";
 
+// Constants
+const AGENT_ID = "019a8f3e-7c1d-7b2a-9e4f-3c5d6e7f8a9b";
+
 /**
  * expectBadRequest checks that parsing body fails with a BadRequestError.
  *
@@ -29,7 +32,10 @@ test("parseCreateCallRequest accepts correctly formatted international numbers",
     "+919452412002",
     "+123456789012345",
   ]) {
-    assert.deepEqual(parseCreateCallRequest({ to }), { to });
+    assert.deepEqual(parseCreateCallRequest({ to, agentId: AGENT_ID }), {
+      to,
+      agentId: AGENT_ID,
+    });
   }
 });
 
@@ -59,12 +65,30 @@ test("parseCreateCallRequest rejects missing or invalid destinations with invali
     "sip:someone@example.com",
     "+19452412002;ext=123",
   ]) {
-    expectBadRequest({ to }, "invalid_phone_number");
+    expectBadRequest({ to, agentId: AGENT_ID }, "invalid_phone_number");
   }
 });
 
 test("parseCreateCallRequest rejects extra fields with unknown_field", () => {
   for (const extra of [{ carrier: "telnyx" }, { from: "+15551230000" }]) {
-    expectBadRequest({ to: "+19452412002", ...extra }, "unknown_field");
+    expectBadRequest(
+      { to: "+19452412002", agentId: AGENT_ID, ...extra },
+      "unknown_field",
+    );
+  }
+});
+
+test("parseCreateCallRequest rejects missing or malformed agent IDs with invalid_agent_id", () => {
+  expectBadRequest({ to: "+19452412002" }, "invalid_agent_id");
+  for (const agentId of [
+    null,
+    123,
+    "",
+    "agent_123",
+    "019a8f3e7c1d7b2a9e4f3c5d6e7f8a9b",
+    ` ${AGENT_ID}`,
+    `${AGENT_ID}0`,
+  ]) {
+    expectBadRequest({ to: "+19452412002", agentId }, "invalid_agent_id");
   }
 });

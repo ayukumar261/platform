@@ -9,7 +9,11 @@ import {
 import { BridgeClient } from "./bridge.ts";
 
 // Constants
-const TO = "+15551234567";
+const REQUEST = {
+  to: "+15551234567",
+  provider: "cartesia",
+  providerAgentId: "agent_123",
+};
 const BRIDGE_API_TOKEN = "private-token";
 
 /**
@@ -47,7 +51,7 @@ test("failed bridge responses are mapped without leaking bodies or retrying", as
       res.end("private-provider-detail");
     });
     await assert.rejects(
-      new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
+      new BridgeClient(url, BRIDGE_API_TOKEN).createCall(REQUEST),
       (error: unknown) => {
         assert.ok(
           error instanceof
@@ -77,7 +81,7 @@ test("invalid acceptance replies cannot become successful API responses", async 
       res.end(body);
     });
     await assert.rejects(
-      new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
+      new BridgeClient(url, BRIDGE_API_TOKEN).createCall(REQUEST),
       BadGatewayError,
     );
     assert.equal(requests, 1);
@@ -96,7 +100,7 @@ test("deadlines cover both response headers and the response body", async (t) =>
       }
     });
     await assert.rejects(
-      new BridgeClient(url, BRIDGE_API_TOKEN, 100).createCall(TO),
+      new BridgeClient(url, BRIDGE_API_TOKEN, 100).createCall(REQUEST),
       sendHeaders ? BadGatewayError : ServiceUnavailableError,
     );
     assert.equal(requests, 1);
@@ -116,7 +120,7 @@ test("redirects cannot forward bridge credentials or start a second request", as
     res.end();
   });
   await assert.rejects(
-    new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
+    new BridgeClient(url, BRIDGE_API_TOKEN).createCall(REQUEST),
     ServiceUnavailableError,
   );
   assert.equal(forwarded, 0);
@@ -125,7 +129,7 @@ test("redirects cannot forward bridge credentials or start a second request", as
 test("connection failures become a service-unavailable error", async (t) => {
   const url = await listen(t, (req) => req.socket.destroy());
   await assert.rejects(
-    new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
+    new BridgeClient(url, BRIDGE_API_TOKEN).createCall(REQUEST),
     ServiceUnavailableError,
   );
 });

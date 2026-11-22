@@ -2,7 +2,18 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, type RequestListener } from "node:http";
 import { test, type TestContext } from "node:test";
-import { createDatabase } from "../../clients/database.ts";
+import {
+  CamelCasePlugin,
+  type CompiledQuery,
+  DummyDriver,
+  Kysely,
+  PostgresAdapter,
+  PostgresIntrospector,
+  PostgresQueryCompiler,
+  type QueryResult,
+} from "kysely";
+import type { Database } from "../../clients/database.ts";
+import type { DB } from "../../clients/database.types.ts";
 import { createApp, loadConfiguration } from "../../index.ts";
 
 // Constants
@@ -14,7 +25,8 @@ const TEST_ENVIRONMENT = {
 };
 const TEST_CALL_ID = "7f89fb58-646e-44f1-b91c-a430c06bc912";
 const ALLOWED_PHONE_NUMBER = "+19452412002";
-const DATABASE = createDatabase(TEST_ENVIRONMENT.DATABASE_URL);
+const AGENT_ID = "019a8f3e-7c1d-7b2a-9e4f-3c5d6e7f8a9b";
+const STORED_AGENT = { provider: "cartesia", provider_agent_id: "agent_123" };
 
 /**
  * listen serves a test handler on an unused local port.
@@ -39,6 +51,41 @@ async function listen(
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   return `http://127.0.0.1:${address.port}`;
+}
+
+/**
+ * fakeDatabase builds a database that records each query instead of sending it.
+ *
+ * @param rows - The snake_case rows that every query returns, as PostgreSQL would.
+ * @returns The database and the queries it has received.
+ */
+function fakeDatabase(rows: Record<string, unknown>[]): {
+  database: Database;
+  queries: CompiledQuery[];
+} {
+  const queries: CompiledQuery[] = [];
+
+  // Answer every query with the given rows
+  const driver = new DummyDriver();
+  driver.acquireConnection = async () => ({
+    async executeQuery<R>(query: CompiledQuery): Promise<QueryResult<R>> {
+      queries.push(query);
+      return { rows: rows as R[] };
+    },
+    async *streamQuery() {},
+  });
+
+  // Compile PostgreSQL with the same column mapping as createDatabase
+  const database = new Kysely<DB>({
+    dialect: {
+      createAdapter: () => new PostgresAdapter(),
+      createDriver: () => driver,
+      createIntrospector: (db) => new PostgresIntrospector(db),
+      createQueryCompiler: () => new PostgresQueryCompiler(),
+    },
+    plugins: [new CamelCasePlugin()],
+  });
+  return { database, queries };
 }
 
 /**
@@ -86,16 +133,17 @@ test("POST /call accepts the allowed number without a caller token and authentic
   });
 
   // Connect the real API and bridge client to the local substitute
+  const { database, queries } = fakeDatabase([STORED_AGENT]);
   const url = await listen(
     t,
     createApp(
       loadConfiguration({ ...TEST_ENVIRONMENT, BRIDGE_URL: bridgeURL }),
-      DATABASE,
+      database,
     ),
   );
   const response = await postCall(
     url,
-    JSON.stringify({ to: ALLOWED_PHONE_NUMBER }),
+    JSON.stringify({ to: ALLOWED_PHONE_NUMBER, agentId: AGENT_ID }),
   );
 
   assert.equal(response.status, 202);
@@ -105,16 +153,52 @@ test("POST /call accepts the allowed number without a caller token and authentic
       method: "POST",
       path: "/call",
       authorization: `Bearer ${TEST_ENVIRONMENT.BRIDGE_API_TOKEN}`,
-      body: { to: ALLOWED_PHONE_NUMBER },
+      body: {
+        to: ALLOWED_PHONE_NUMBER,
+        provider: "cartesia",
+        providerAgentId: "agent_123",
+      },
     },
   ]);
+  assert.deepEqual(
+    queries.map(({ sql, parameters }) => ({ sql, parameters })),
+    [
+      {
+        sql: 'select "provider", "provider_agent_id" from "agents" where "id" = $1',
+        parameters: [AGENT_ID],
+      },
+    ],
+  );
+});
+
+test("POST /call rejects an unknown agentId with HTTP 404 before contacting the bridge", async (t) => {
+  const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
+  const { database } = fakeDatabase([]);
+  const url = await listen(
+    t,
+    createApp(loadConfiguration(TEST_ENVIRONMENT), database, { createCall }),
+  );
+  const response = await postCall(
+    url,
+    JSON.stringify({ to: ALLOWED_PHONE_NUMBER, agentId: AGENT_ID }),
+  );
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), {
+    error: {
+      code: "agent_not_found",
+      message: "No agent exists with this agentId.",
+    },
+  });
+  assert.equal(createCall.mock.callCount(), 0);
 });
 
 test("POST /call rejects other destination numbers with HTTP 403 before contacting the bridge", async (t) => {
   const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
+  const { database } = fakeDatabase([STORED_AGENT]);
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, { createCall }),
+    createApp(loadConfiguration(TEST_ENVIRONMENT), database, { createCall }),
   );
 
   // Check numbers that are close to the allowed number
@@ -124,7 +208,10 @@ test("POST /call rejects other destination numbers with HTTP 403 before contacti
     "+19452412003",
     "+194524120020",
   ]) {
-    const response = await postCall(url, JSON.stringify({ to }));
+    const response = await postCall(
+      url,
+      JSON.stringify({ to, agentId: AGENT_ID }),
+    );
     assert.equal(response.status, 403, to);
     assert.deepEqual(await response.json(), {
       error: {
@@ -138,9 +225,10 @@ test("POST /call rejects other destination numbers with HTTP 403 before contacti
 
 test("POST /call rejects invalid input with HTTP 400 before contacting the bridge", async (t) => {
   const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
+  const { database } = fakeDatabase([STORED_AGENT]);
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, { createCall }),
+    createApp(loadConfiguration(TEST_ENVIRONMENT), database, { createCall }),
   );
 
   // Check empty bodies, malformed JSON, and a schema validation failure
@@ -162,9 +250,10 @@ test("POST /call rejects invalid input with HTTP 400 before contacting the bridg
 
 test("POST /call rejects oversized and unsupported bodies before contacting the bridge", async (t) => {
   const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
+  const { database } = fakeDatabase([STORED_AGENT]);
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, { createCall }),
+    createApp(loadConfiguration(TEST_ENVIRONMENT), database, { createCall }),
   );
 
   const scenarios: {
@@ -174,7 +263,7 @@ test("POST /call rejects oversized and unsupported bodies before contacting the 
     code: string;
   }[] = [
     {
-      body: JSON.stringify({ to: "x".repeat(5000) }),
+      body: JSON.stringify({ to: "x".repeat(5000), agentId: AGENT_ID }),
       headers: {},
       status: 413,
       code: "payload_too_large",

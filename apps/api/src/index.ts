@@ -142,7 +142,7 @@ export function createApp(
   app.post(
     "/call",
     express.json({ limit: "4kb", inflate: false }),
-    createCall(bridge),
+    createCall(bridge, database),
   );
 
   // Read agent requests before checking their fields

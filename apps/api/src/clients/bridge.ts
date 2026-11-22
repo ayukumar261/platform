@@ -2,7 +2,7 @@ import {
   BadGatewayError,
   ServiceUnavailableError,
 } from "../lib/errors/index.ts";
-import type { Bridge } from "./bridge.types.ts";
+import type { Bridge, CallRequest } from "./bridge.types.ts";
 
 export class BridgeClient implements Bridge {
   private readonly url: URL;
@@ -16,18 +16,19 @@ export class BridgeClient implements Bridge {
   }
 
   /**
-   * createCall asks the bridge to start one outbound call through Twilio.
+   * createCall asks the bridge to start one outbound call through Twilio,
+   * connecting the provider's agent once the phone answers.
    *
    * The bridge owns the conversation after acceptance. A timeout can happen
    * after it has accepted the request, so this client never retries a POST.
    * Each new request can place another call.
    *
-   * @param to - The destination number, already checked by the request schema.
+   * @param request - The checked destination number and the agent to connect.
    * @returns The bridge's ID for the accepted call.
    * @throws ServiceUnavailableError when the bridge is unreachable or stopping.
    * @throws BadGatewayError when the bridge rejects or misformats its reply.
    */
-  async createCall(to: string): Promise<{ callId: string }> {
+  async createCall(request: CallRequest): Promise<{ callId: string }> {
     let response: Response;
     try {
       // Send one request with a deadline and a private credential
@@ -37,7 +38,11 @@ export class BridgeClient implements Bridge {
           Authorization: `Bearer ${this.token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ to }),
+        body: JSON.stringify({
+          to: request.to,
+          provider: request.provider,
+          providerAgentId: request.providerAgentId,
+        }),
         redirect: "error",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
