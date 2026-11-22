@@ -5,7 +5,12 @@
       "outputs": ["dist/**"]
     },
     "dev": {
-      "passThroughEnv": ["API_PORT", "BRIDGE_URL", "BRIDGE_API_TOKEN"]
+      "passThroughEnv": [
+        "API_PORT",
+        "BRIDGE_URL",
+        "BRIDGE_API_TOKEN",
+        "DATABASE_URL"
+      ]
     },
     "test": {}
   }

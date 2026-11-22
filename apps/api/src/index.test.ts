@@ -10,6 +10,7 @@ const TEST_ENVIRONMENT = {
   API_PORT: "3000",
   BRIDGE_API_TOKEN: "test-bridge-token",
   BRIDGE_URL: "http://127.0.0.1:8080",
+  DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:5432/postgres",
 };
 const TEST_CALL_ID = "7f89fb58-646e-44f1-b91c-a430c06bc912";
 const ALLOWED_PHONE_NUMBER = "+19452412002";
@@ -130,6 +131,7 @@ test("configuration uses the explicitly configured port", () => {
     port: 3000,
     bridgeApiToken: "test-bridge-token",
     bridgeURL: "http://127.0.0.1:8080",
+    databaseURL: "postgres://postgres:postgres@127.0.0.1:5432/postgres",
   });
   assert.equal(
     loadConfiguration({ ...TEST_ENVIRONMENT, API_PORT: "4500" }).port,
@@ -140,7 +142,7 @@ test("configuration uses the explicitly configured port", () => {
 test("configuration reports all missing settings without their values", () => {
   assert.throws(
     () => loadConfiguration({}),
-    /BRIDGE_API_TOKEN, BRIDGE_URL, API_PORT/,
+    /BRIDGE_API_TOKEN, BRIDGE_URL, API_PORT, DATABASE_URL/,
   );
   for (const name of Object.keys(TEST_ENVIRONMENT)) {
     for (const value of ["", " ", undefined]) {
@@ -185,5 +187,36 @@ test("configuration rejects malformed ports, URLs, and tokens", () => {
         BRIDGE_API_TOKEN: "private secret",
       }),
     /BRIDGE_API_TOKEN/,
+  );
+  for (const DATABASE_URL of [
+    "invalid",
+    "postgres://",
+    "mysql://postgres:private-secret@127.0.0.1:3306/postgres",
+    "http://postgres:private-secret@127.0.0.1:5432/postgres",
+    "postgres://postgres:private-secret@:5432/postgres",
+    "postgres://postgres:private-secret@127.0.0.1/postgres",
+    "postgres://:private-secret@127.0.0.1:5432/postgres",
+    "postgres://postgres@127.0.0.1:5432/postgres",
+    "postgres://postgres:private-secret@127.0.0.1:5432",
+    "postgres://postgres:private-secret@127.0.0.1:5432/",
+  ]) {
+    assert.throws(
+      () => loadConfiguration({ ...TEST_ENVIRONMENT, DATABASE_URL }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(
+          error.message,
+          "Invalid environment variables: DATABASE_URL",
+        );
+        return true;
+      },
+    );
+  }
+  assert.equal(
+    loadConfiguration({
+      ...TEST_ENVIRONMENT,
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/postgres",
+    }).databaseURL,
+    "postgresql://postgres:postgres@postgres:5432/postgres",
   );
 });

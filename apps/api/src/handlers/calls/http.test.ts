@@ -9,6 +9,7 @@ const TEST_ENVIRONMENT = {
   API_PORT: "3000",
   BRIDGE_API_TOKEN: "test-bridge-token",
   BRIDGE_URL: "http://127.0.0.1:8080",
+  DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:5432/postgres",
 };
 const TEST_CALL_ID = "7f89fb58-646e-44f1-b91c-a430c06bc912";
 const ALLOWED_PHONE_NUMBER = "+19452412002";

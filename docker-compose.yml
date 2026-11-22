@@ -125,6 +125,7 @@ services:
       API_PORT: "3000"
       BRIDGE_API_TOKEN: ${BRIDGE_API_TOKEN:?}
       BRIDGE_URL: http://bridge:8080
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

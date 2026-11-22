@@ -2,6 +2,7 @@ import process from "node:process";
 import express from "express";
 import { BridgeClient } from "./clients/bridge.ts";
 import type { Bridge } from "./clients/bridge.types.ts";
+import { createDatabase } from "./clients/database.ts";
 import { createCall } from "./handlers/calls/http.ts";
 import { NotFoundError } from "./lib/errors/index.ts";
 import { errorHandler } from "./lib/errors/handler.ts";
@@ -10,11 +11,14 @@ export interface Configuration {
   port: number;
   bridgeURL: string;
   bridgeApiToken: string;
+  databaseURL: string;
 }
 
 function main(): void {
   // Read the settings before accepting requests
   const configuration = loadConfiguration();
+  const database = createDatabase(configuration.databaseURL);
+
   const app = createApp(configuration);
 
   // Start the HTTP server
@@ -22,10 +26,10 @@ function main(): void {
     console.info(`API listening on port ${configuration.port}`);
   });
 
-  // Let active requests finish when the process stops
+  // Let active requests finish, then close the database connections
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
-      server.close();
+      server.close(() => void database.destroy());
       setTimeout(() => server.closeAllConnections(), 5000).unref();
     });
   }
@@ -80,13 +84,30 @@ export function loadConfiguration(
     invalid.add("API_PORT");
   }
 
+  // Require every part of the PostgreSQL URL so no defaults
+  const databaseURL = required("DATABASE_URL");
+  try {
+    const url = new URL(databaseURL);
+    if (
+      !["postgres:", "postgresql:"].includes(url.protocol) ||
+      !url.hostname ||
+      !url.port ||
+      !url.username ||
+      !url.password ||
+      url.pathname.length <= 1
+    )
+      invalid.add("DATABASE_URL");
+  } catch {
+    invalid.add("DATABASE_URL");
+  }
+
   // Report every invalid setting at once
   if (invalid.size > 0) {
     throw new Error(
       `Invalid environment variables: ${[...invalid].join(", ")}`,
     );
   }
-  return { port, bridgeURL, bridgeApiToken };
+  return { port, bridgeURL, bridgeApiToken, databaseURL };
 }
 
 /**
