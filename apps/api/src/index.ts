@@ -1,6 +1,7 @@
 import process from "node:process";
 import express from "express";
-import { BridgeClient, type Bridge } from "./clients/bridge.ts";
+import { BridgeClient } from "./clients/bridge.ts";
+import type { Bridge } from "./clients/bridge.types.ts";
 import { createCall } from "./handlers/calls/http.ts";
 import { NotFoundError } from "./lib/errors/index.ts";
 import { errorHandler } from "./lib/errors/handler.ts";

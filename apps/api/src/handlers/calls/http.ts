@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import type { Bridge } from "../../clients/bridge.ts";
+import type { Bridge } from "../../clients/bridge.types.ts";
 import {
   ForbiddenError,
   UnsupportedMediaTypeError,

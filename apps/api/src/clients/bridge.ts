@@ -2,12 +2,7 @@ import {
   BadGatewayError,
   ServiceUnavailableError,
 } from "../lib/errors/index.ts";
-
-/** Describe how to request a call from the bridge. */
-export interface Bridge {
-  /** Return an ID after acceptance, before the call is answered or completed. */
-  createCall(to: string): Promise<{ callId: string }>;
-}
+import type { Bridge } from "./bridge.types.ts";
 
 /** BridgeClient sends call requests to the private Go bridge. */
 export class BridgeClient implements Bridge {
