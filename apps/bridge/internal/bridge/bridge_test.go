@@ -11,10 +11,78 @@ import (
 	"bridge/internal/telephony"
 )
 
+type fakeCalls struct {
+	dial   func(context.Context, telephony.OutboundRequest) (telephony.Call, error)
+	attach func(context.Context, telephony.InboundRequest) (telephony.Call, error)
+}
+
+// DialOutbound passes the request to dial.
+//
+// Parameters:
+//   - ctx: passed to dial
+//   - request: passed to dial
+//
+// Returns:
+//   - the call from dial
+//   - the error from dial
+func (s fakeCalls) DialOutbound(ctx context.Context, request telephony.OutboundRequest) (telephony.Call, error) {
+	return s.dial(ctx, request)
+}
+
+// AttachInbound passes the request to attach.
+//
+// Parameters:
+//   - ctx: passed to attach
+//   - request: passed to attach
+//
+// Returns:
+//   - the call from attach
+//   - the error from attach
+func (s fakeCalls) AttachInbound(ctx context.Context, request telephony.InboundRequest) (telephony.Call, error) {
+	return s.attach(ctx, request)
+}
+
+type fakeAgent func(context.Context, agents.SessionConfig) (agents.Session, error)
+
+// Name returns "test".
+//
+// Returns:
+//   - the provider's name
+func (fakeAgent) Name() string { return "test" }
+
+// NewSession passes the config to the test function.
+//
+// Parameters:
+//   - ctx: passed to the test function
+//   - config: passed to the test function
+//
+// Returns:
+//   - the session from the test function
+//   - the error from the test function
+func (f fakeAgent) NewSession(ctx context.Context, config agents.SessionConfig) (agents.Session, error) {
+	return f(ctx, config)
+}
+
+type fakeCall struct {
+	telephony.Call
+	end func(context.Context) error
+}
+
+// End passes the context to end.
+//
+// Parameters:
+//   - ctx: passed to end
+//
+// Returns:
+//   - the error from end
+func (c fakeCall) End(ctx context.Context) error {
+	return c.end(ctx)
+}
+
 func TestDialUsesTwilioAndPreservesAcceptedCallID(t *testing.T) {
 	failed := errors.New("dial failed")
 	dials := 0
-	calls := testCalls{
+	calls := fakeCalls{
 		dial: func(_ context.Context, request telephony.OutboundRequest) (telephony.Call, error) {
 			dials++
 			expected := telephony.OutboundRequest{TrunkID: "ST_twilio", To: "+15551234567", RoomName: "outbound-test-call"}
@@ -35,7 +103,7 @@ func TestDialUsesTwilioAndPreservesAcceptedCallID(t *testing.T) {
 }
 
 func TestDialRejectsUnknownCarrierBeforeDialing(t *testing.T) {
-	calls := testCalls{
+	calls := fakeCalls{
 		dial: func(context.Context, telephony.OutboundRequest) (telephony.Call, error) {
 			t.Fatal("an unknown carrier must not start a call")
 			return nil, nil
@@ -52,13 +120,13 @@ func TestCallsUseMatchingAgentAndHangUpIfAgentSetupFails(t *testing.T) {
 		t.Run(direction, func(t *testing.T) {
 			failed := errors.New("agent setup failed")
 			ended := false
-			call := testCall{end: func(context.Context) error {
+			call := fakeCall{end: func(context.Context) error {
 				ended = true
 				return nil
 			}}
 			incoming := telephony.InboundRequest{RoomName: "incoming-call", ParticipantIdentity: "caller"}
 			requests := 0
-			calls := testCalls{
+			calls := fakeCalls{
 				attach: func(_ context.Context, request telephony.InboundRequest) (telephony.Call, error) {
 					requests++
 					if direction != "inbound" || request != incoming {
@@ -76,7 +144,7 @@ func TestCallsUseMatchingAgentAndHangUpIfAgentSetupFails(t *testing.T) {
 			}
 
 			// Check the selected agent as the bridge requests its session
-			provider := testAgent(func(_ context.Context, config agents.SessionConfig) (agents.Session, error) {
+			provider := fakeAgent(func(_ context.Context, config agents.SessionConfig) (agents.Session, error) {
 				if config.AgentID != direction+"-agent" || config.Audio != relay.AudioFormat {
 					t.Fatalf("unexpected agent configuration: %+v", config)
 				}
@@ -97,72 +165,4 @@ func TestCallsUseMatchingAgentAndHangUpIfAgentSetupFails(t *testing.T) {
 			}
 		})
 	}
-}
-
-type testCalls struct {
-	dial   func(context.Context, telephony.OutboundRequest) (telephony.Call, error)
-	attach func(context.Context, telephony.InboundRequest) (telephony.Call, error)
-}
-
-// DialOutbound passes the request to dial.
-//
-// Parameters:
-//   - ctx: passed to dial
-//   - request: passed to dial
-//
-// Returns:
-//   - the call from dial
-//   - the error from dial
-func (s testCalls) DialOutbound(ctx context.Context, request telephony.OutboundRequest) (telephony.Call, error) {
-	return s.dial(ctx, request)
-}
-
-// AttachInbound passes the request to attach.
-//
-// Parameters:
-//   - ctx: passed to attach
-//   - request: passed to attach
-//
-// Returns:
-//   - the call from attach
-//   - the error from attach
-func (s testCalls) AttachInbound(ctx context.Context, request telephony.InboundRequest) (telephony.Call, error) {
-	return s.attach(ctx, request)
-}
-
-type testAgent func(context.Context, agents.SessionConfig) (agents.Session, error)
-
-// Name returns "test".
-//
-// Returns:
-//   - the provider's name
-func (testAgent) Name() string { return "test" }
-
-// NewSession passes the config to the test function.
-//
-// Parameters:
-//   - ctx: passed to the test function
-//   - config: passed to the test function
-//
-// Returns:
-//   - the session from the test function
-//   - the error from the test function
-func (f testAgent) NewSession(ctx context.Context, config agents.SessionConfig) (agents.Session, error) {
-	return f(ctx, config)
-}
-
-type testCall struct {
-	telephony.Call
-	end func(context.Context) error
-}
-
-// End passes the context to end.
-//
-// Parameters:
-//   - ctx: passed to end
-//
-// Returns:
-//   - the error from end
-func (c testCall) End(ctx context.Context) error {
-	return c.end(ctx)
 }

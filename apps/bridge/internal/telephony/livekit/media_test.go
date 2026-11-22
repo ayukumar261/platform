@@ -2,7 +2,6 @@ package livekit
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"testing"
@@ -24,7 +23,9 @@ func TestAudioInputWritesLittleEndianPCM(t *testing.T) {
 
 func TestAudioInputDropsChunksWhenFull(t *testing.T) {
 	input := make(audioInput, 1)
-	input.WriteSample(media.PCM16Sample{1})
+	if err := input.WriteSample(media.PCM16Sample{1}); err != nil {
+		t.Fatal(err)
+	}
 	if err := input.WriteSample(media.PCM16Sample{2}); err != nil {
 		t.Fatalf("expected a full queue to drop the chunk without error, got %v", err)
 	}
@@ -41,7 +42,7 @@ func TestReadAudioReturnsEOFWhenCallEnds(t *testing.T) {
 	c := &connection{input: make(audioInput), done: make(chan struct{})}
 	close(c.done)
 
-	if _, err := c.ReadAudio(context.Background()); err != io.EOF {
+	if _, err := c.ReadAudio(t.Context()); err != io.EOF {
 		t.Fatalf("expected io.EOF, got %v", err)
 	}
 }

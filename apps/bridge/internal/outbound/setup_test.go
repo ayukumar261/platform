@@ -1,7 +1,6 @@
 package outbound
 
 import (
-	"context"
 	"io"
 	"maps"
 	"net/http"
@@ -38,7 +37,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		f.t.Fatal(err)
+		f.t.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	var response proto.Message
@@ -48,7 +49,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "CreateSIPOutboundTrunk":
 		request := &livekit.CreateSIPOutboundTrunkRequest{}
 		if err := proto.Unmarshal(body, request); err != nil {
-			f.t.Fatal(err)
+			f.t.Error(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		request.Trunk.SipTrunkId = "ST_" + request.Trunk.Name
 		f.trunks = append(f.trunks, request.Trunk)
@@ -56,7 +59,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "UpdateSIPOutboundTrunk":
 		request := &livekit.UpdateSIPOutboundTrunkRequest{}
 		if err := proto.Unmarshal(body, request); err != nil {
-			f.t.Fatal(err)
+			f.t.Error(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		index := slices.IndexFunc(f.trunks, func(trunk *livekit.SIPOutboundTrunkInfo) bool {
 			return trunk.SipTrunkId == request.SipTrunkId
@@ -74,7 +79,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	encoded, err := proto.Marshal(response)
 	if err != nil {
-		f.t.Fatal(err)
+		f.t.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/protobuf")
 	if _, err := w.Write(encoded); err != nil {
@@ -117,7 +124,7 @@ func setup(t *testing.T, fake *fakeLiveKit) (map[string]string, error) {
 	t.Cleanup(server.Close)
 
 	sipClient := lksdk.NewSIPClient(server.URL, "test-api-key", "test-api-secret")
-	return Setup(context.Background(), sipClient, testKamailioAddress)
+	return Setup(t.Context(), sipClient, testKamailioAddress)
 }
 
 func TestSetupCreatesTrunks(t *testing.T) {
@@ -193,7 +200,7 @@ func TestSetupReportsFailingStep(t *testing.T) {
 	server.Close()
 
 	sipClient := lksdk.NewSIPClient(server.URL, "test-api-key", "test-api-secret")
-	_, err := Setup(context.Background(), sipClient, testKamailioAddress)
+	_, err := Setup(t.Context(), sipClient, testKamailioAddress)
 	if err == nil || !strings.Contains(err.Error(), "ensure outbound trunk for telnyx") {
 		t.Fatalf("expected an outbound trunk error, got %v", err)
 	}

@@ -2,20 +2,24 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, type RequestListener } from "node:http";
 import { test, type TestContext } from "node:test";
-import { BridgeClient } from "./bridge.ts";
 import {
   BadGatewayError,
   ServiceUnavailableError,
 } from "../lib/errors/index.ts";
+import { BridgeClient } from "./bridge.ts";
+
+// Constants
+const TO = "+15551234567";
+const BRIDGE_API_TOKEN = "private-token";
 
 /**
- * serve runs a bridge substitute that cannot contact a phone carrier.
+ * listen serves a test handler on an unused local port.
  *
  * @param t - The test that closes the server when it ends.
- * @param handler - Answers each request in place of the bridge.
- * @returns The substitute's base URL.
+ * @param handler - Answers each request.
+ * @returns The server's base URL.
  */
-async function serve(
+async function listen(
   t: TestContext,
   handler: RequestListener,
 ): Promise<string> {
@@ -24,7 +28,9 @@ async function serve(
   await once(server, "listening");
   t.after(async () => {
     server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
   });
   const address = server.address();
   assert.ok(address && typeof address !== "string");
@@ -34,14 +40,14 @@ async function serve(
 test("failed bridge responses are mapped without leaking bodies or retrying", async (t) => {
   for (const status of [400, 401, 403, 500, 503]) {
     let requests = 0;
-    const url = await serve(t, (req, res) => {
+    const url = await listen(t, (req, res) => {
       requests++;
       req.resume();
       res.writeHead(status);
       res.end("private-provider-detail");
     });
     await assert.rejects(
-      new BridgeClient(url, "private-token").createCall("+15551234567"),
+      new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
       (error: unknown) => {
         assert.ok(
           error instanceof
@@ -64,14 +70,14 @@ test("invalid acceptance replies cannot become successful API responses", async 
     '{"callId":123}',
   ]) {
     let requests = 0;
-    const url = await serve(t, (req, res) => {
+    const url = await listen(t, (req, res) => {
       requests++;
       req.resume();
       res.writeHead(202, { "Content-Type": "application/json" });
       res.end(body);
     });
     await assert.rejects(
-      new BridgeClient(url, "private-token").createCall("+15551234567"),
+      new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
       BadGatewayError,
     );
     assert.equal(requests, 1);
@@ -81,7 +87,7 @@ test("invalid acceptance replies cannot become successful API responses", async 
 test("deadlines cover both response headers and the response body", async (t) => {
   for (const sendHeaders of [false, true]) {
     let requests = 0;
-    const url = await serve(t, (req, res) => {
+    const url = await listen(t, (req, res) => {
       requests++;
       req.resume();
       if (sendHeaders) {
@@ -90,7 +96,7 @@ test("deadlines cover both response headers and the response body", async (t) =>
       }
     });
     await assert.rejects(
-      new BridgeClient(url, "private-token", 100).createCall("+15551234567"),
+      new BridgeClient(url, BRIDGE_API_TOKEN, 100).createCall(TO),
       sendHeaders ? BadGatewayError : ServiceUnavailableError,
     );
     assert.equal(requests, 1);
@@ -99,27 +105,27 @@ test("deadlines cover both response headers and the response body", async (t) =>
 
 test("redirects cannot forward bridge credentials or start a second request", async (t) => {
   let forwarded = 0;
-  const destination = await serve(t, (req, res) => {
+  const destination = await listen(t, (req, res) => {
     forwarded++;
     req.resume();
     res.end();
   });
-  const url = await serve(t, (req, res) => {
+  const url = await listen(t, (req, res) => {
     req.resume();
     res.writeHead(307, { Location: `${destination}/call` });
     res.end();
   });
   await assert.rejects(
-    new BridgeClient(url, "private-token").createCall("+15551234567"),
+    new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
     ServiceUnavailableError,
   );
   assert.equal(forwarded, 0);
 });
 
 test("connection failures become a service-unavailable error", async (t) => {
-  const url = await serve(t, (req) => req.socket.destroy());
+  const url = await listen(t, (req) => req.socket.destroy());
   await assert.rejects(
-    new BridgeClient(url, "private-token").createCall("+15551234567"),
+    new BridgeClient(url, BRIDGE_API_TOKEN).createCall(TO),
     ServiceUnavailableError,
   );
 });

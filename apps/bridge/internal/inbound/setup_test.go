@@ -1,7 +1,6 @@
 package inbound
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +36,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		f.t.Fatal(err)
+		f.t.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	var response proto.Message
@@ -47,7 +48,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "CreateSIPInboundTrunk":
 		request := &livekit.CreateSIPInboundTrunkRequest{}
 		if err := proto.Unmarshal(body, request); err != nil {
-			f.t.Fatal(err)
+			f.t.Error(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		request.Trunk.SipTrunkId = testTrunkID
 		f.trunks = append(f.trunks, request.Trunk)
@@ -57,7 +60,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "CreateSIPDispatchRule":
 		request := &livekit.CreateSIPDispatchRuleRequest{}
 		if err := proto.Unmarshal(body, request); err != nil {
-			f.t.Fatal(err)
+			f.t.Error(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		f.dispatchRules = append(f.dispatchRules, request.DispatchRule)
 		response = request.DispatchRule
@@ -68,7 +73,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	encoded, err := proto.Marshal(response)
 	if err != nil {
-		f.t.Fatal(err)
+		f.t.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/protobuf")
 	if _, err := w.Write(encoded); err != nil {
@@ -99,7 +106,7 @@ func setup(t *testing.T, fake *fakeLiveKit) error {
 	t.Cleanup(server.Close)
 
 	sipClient := lksdk.NewSIPClient(server.URL, "test-api-key", "test-api-secret")
-	return Setup(context.Background(), sipClient)
+	return Setup(t.Context(), sipClient)
 }
 
 func TestSetupCreatesTrunkAndDispatchRule(t *testing.T) {
@@ -149,7 +156,7 @@ func TestSetupReportsFailingStep(t *testing.T) {
 	server.Close()
 
 	sipClient := lksdk.NewSIPClient(server.URL, "test-api-key", "test-api-secret")
-	err := Setup(context.Background(), sipClient)
+	err := Setup(t.Context(), sipClient)
 	if err == nil || !strings.Contains(err.Error(), "ensure inbound trunk") {
 		t.Fatalf("expected an inbound trunk error, got %v", err)
 	}

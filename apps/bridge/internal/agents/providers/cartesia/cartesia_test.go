@@ -2,6 +2,7 @@ package cartesia
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -17,6 +18,7 @@ import (
 // Constants
 const testAPIKey = "test-api-key"
 
+// Configuration
 var testConfig = agents.SessionConfig{
 	AgentID: "agent-test",
 	Audio:   agents.AudioFormat{Encoding: agents.PCM16LE, SampleRate: 16000, Channels: 1},
@@ -63,8 +65,7 @@ func fakeCartesia(t *testing.T, script func(conn *websocket.Conn)) *Provider {
 			t.Error(err)
 			return
 		}
-		if err := conn.WriteJSON(map[string]any{"type": "session_ready"}); err != nil {
-			t.Error(err)
+		if !send(t, conn, map[string]any{"type": "session_ready"}) {
 			return
 		}
 
@@ -86,7 +87,12 @@ func start(t *testing.T, provider *Provider) agents.Session {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { session.Close(t.Context()) })
+	t.Cleanup(func() {
+		// t.Context() is already cancelled while cleanup runs
+		if err := session.Close(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
 
 	if err := session.Start(t.Context()); err != nil {
 		t.Fatal(err)
@@ -94,14 +100,36 @@ func start(t *testing.T, provider *Provider) agents.Session {
 	return session
 }
 
+// send writes messages from Cartesia's side, in order.
+//
+// Parameters:
+//   - t: reports the first failed write
+//   - conn: the connection to write to
+//   - messages: the JSON messages to send
+//
+// Returns:
+//   - true if every message was sent
+func send(t *testing.T, conn *websocket.Conn, messages ...map[string]any) bool {
+	for _, message := range messages {
+		if err := conn.WriteJSON(message); err != nil {
+			t.Errorf("send %v: %v", message["type"], err)
+			return false
+		}
+	}
+	return true
+}
+
 // closeWith closes the connection from Cartesia's side with the given code.
 //
 // Parameters:
+//   - t: reports a failed close
 //   - conn: the connection to close
 //   - code: the WebSocket close code to send
-func closeWith(conn *websocket.Conn, code int) {
+func closeWith(t *testing.T, conn *websocket.Conn, code int) {
 	message := websocket.FormatCloseMessage(code, "")
-	conn.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
+	if err := conn.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second)); err != nil {
+		t.Errorf("close with %d: %v", code, err)
+	}
 }
 
 // collect reads events until the session closes them.
@@ -153,9 +181,7 @@ func TestStartSendsCredentialsAndAudioFormat(t *testing.T) {
 		if create.Type != "session_create" || create.Audio.InputFormat != "pcm_16000" {
 			t.Errorf("expected session_create with pcm_16000, got %+v", create)
 		}
-		if err := conn.WriteJSON(map[string]any{"type": "session_ready"}); err != nil {
-			t.Error(err)
-		}
+		send(t, conn, map[string]any{"type": "session_ready"})
 	})
 
 	start(t, provider)
@@ -169,7 +195,11 @@ func TestStartReportsRejectedConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close(t.Context())
+	defer func() {
+		if err := session.Close(t.Context()); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	err = session.Start(t.Context())
 	if err == nil || !strings.Contains(err.Error(), "401") {
@@ -208,18 +238,27 @@ func TestSendAudioSendsAudioInput(t *testing.T) {
 	if err := session.SendAudio(t.Context(), audio); err != nil {
 		t.Fatal(err)
 	}
-	if got := <-received; !bytes.Equal(got, audio) {
-		t.Fatalf("expected %v, got %v", audio, got)
+	select {
+	case sent := <-received:
+		if !bytes.Equal(sent, audio) {
+			t.Fatalf("expected %v, got %v", audio, sent)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("audio did not reach Cartesia")
 	}
 }
 
 func TestEventsTranslateMessages(t *testing.T) {
 	provider := fakeCartesia(t, func(conn *websocket.Conn) {
-		conn.WriteJSON(map[string]any{"type": "audio_output", "audio": []byte{1, 2}})
-		conn.WriteJSON(map[string]any{"type": "audio_output_clear"})
-		conn.WriteJSON(map[string]any{"type": "dtmf_output", "digit": "#"})
-		conn.WriteJSON(map[string]any{"type": "turn_ended", "role": "user", "text": "Hello"})
-		closeWith(conn, websocket.CloseNormalClosure)
+		if !send(t, conn,
+			map[string]any{"type": "audio_output", "audio": []byte{1, 2}},
+			map[string]any{"type": "audio_output_clear"},
+			map[string]any{"type": "dtmf_output", "digit": "#"},
+			map[string]any{"type": "turn_ended", "role": "user", "text": "Hello"},
+		) {
+			return
+		}
+		closeWith(t, conn, websocket.CloseNormalClosure)
 	})
 	session := start(t, provider)
 
@@ -237,8 +276,10 @@ func TestEventsTranslateMessages(t *testing.T) {
 
 func TestEventsSkipNonFatalErrors(t *testing.T) {
 	provider := fakeCartesia(t, func(conn *websocket.Conn) {
-		conn.WriteJSON(map[string]any{"type": "error", "code": "invalid_event", "fatal": false})
-		closeWith(conn, websocket.CloseNormalClosure)
+		if !send(t, conn, map[string]any{"type": "error", "code": "invalid_event", "fatal": false}) {
+			return
+		}
+		closeWith(t, conn, websocket.CloseNormalClosure)
 	})
 	session := start(t, provider)
 
@@ -250,7 +291,7 @@ func TestEventsSkipNonFatalErrors(t *testing.T) {
 
 func TestEventsReportAbnormalClose(t *testing.T) {
 	provider := fakeCartesia(t, func(conn *websocket.Conn) {
-		closeWith(conn, websocket.CloseInternalServerErr)
+		closeWith(t, conn, websocket.CloseInternalServerErr)
 	})
 	session := start(t, provider)
 
@@ -263,7 +304,9 @@ func TestEventsReportAbnormalClose(t *testing.T) {
 func TestClientToolCallGetsErrorResult(t *testing.T) {
 	result := make(chan map[string]any, 1)
 	provider := fakeCartesia(t, func(conn *websocket.Conn) {
-		conn.WriteJSON(map[string]any{"type": "client_tool_call", "tool_call_id": "tool-1", "expects_response": true})
+		if !send(t, conn, map[string]any{"type": "client_tool_call", "tool_call_id": "tool-1", "expects_response": true}) {
+			return
+		}
 		var message map[string]any
 		if err := conn.ReadJSON(&message); err != nil {
 			t.Error(err)
@@ -273,16 +316,21 @@ func TestClientToolCallGetsErrorResult(t *testing.T) {
 	})
 	start(t, provider)
 
-	message := <-result
-	if message["type"] != "client_tool_result" || message["tool_call_id"] != "tool-1" || message["is_error"] != true {
-		t.Fatalf("expected an error result for tool-1, got %v", message)
+	select {
+	case message := <-result:
+		if message["type"] != "client_tool_result" || message["tool_call_id"] != "tool-1" || message["is_error"] != true {
+			t.Fatalf("expected an error result for tool-1, got %v", message)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the tool call did not get a result")
 	}
 }
 
 func TestCloseStopsEvents(t *testing.T) {
 	provider := fakeCartesia(t, func(conn *websocket.Conn) {
+		// Wait until the session closes the connection, which ends this read
 		var message any
-		conn.ReadJSON(&message)
+		_ = conn.ReadJSON(&message)
 	})
 	session := start(t, provider)
 

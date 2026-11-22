@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Configuration
 var phonePattern = regexp.MustCompile(`^\+[1-9][0-9]{1,14}$`)
 
 type Request struct {

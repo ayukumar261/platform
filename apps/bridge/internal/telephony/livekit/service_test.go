@@ -43,7 +43,9 @@ type fakeLiveKit struct {
 func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		f.t.Fatal(err)
+		f.t.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	var response proto.Message
@@ -51,11 +53,13 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/twirp/livekit.SIP/CreateSIPParticipant":
 		request := &livekit.CreateSIPParticipantRequest{}
 		if err := proto.Unmarshal(body, request); err != nil {
-			f.t.Fatal(err)
+			f.t.Error(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		f.dialed = append(f.dialed, request)
 		if f.dialFails {
-			twirpError(w, http.StatusServiceUnavailable, "unavailable")
+			twirpError(f.t, w, http.StatusServiceUnavailable, "unavailable")
 			return
 		}
 		response = &livekit.SIPParticipantInfo{SipCallId: testCallID}
@@ -64,11 +68,13 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/twirp/livekit.RoomService/RemoveParticipant":
 		request := &livekit.RoomParticipantIdentity{}
 		if err := proto.Unmarshal(body, request); err != nil {
-			f.t.Fatal(err)
+			f.t.Error(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		f.removed = append(f.removed, request)
 		if f.phoneGone {
-			twirpError(w, http.StatusNotFound, "not_found")
+			twirpError(f.t, w, http.StatusNotFound, "not_found")
 			return
 		}
 		response = &livekit.RemoveParticipantResponse{}
@@ -79,7 +85,9 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	encoded, err := proto.Marshal(response)
 	if err != nil {
-		f.t.Fatal(err)
+		f.t.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/protobuf")
 	if _, err := w.Write(encoded); err != nil {
@@ -90,13 +98,16 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // twirpError replies with a Twirp error, as LiveKit does.
 //
 // Parameters:
+//   - t: reports a failed write
 //   - w: receives the error
 //   - status: the HTTP status code
 //   - code: the Twirp error code, such as "not_found"
-func twirpError(w http.ResponseWriter, status int, code string) {
+func twirpError(t *testing.T, w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	io.WriteString(w, `{"code":"`+code+`","msg":"test error"}`)
+	if _, err := io.WriteString(w, `{"code":"`+code+`","msg":"test error"}`); err != nil {
+		t.Errorf("write error response: %v", err)
+	}
 }
 
 type fakeMedia struct {
@@ -225,13 +236,15 @@ func testService(t *testing.T, fake *fakeLiveKit, media *fakeMedia) *Service {
 // dial places a test call to +15550000003.
 //
 // Parameters:
+//   - t: cancels the dial when the test ends
 //   - service: the service that places the call
 //
 // Returns:
 //   - the answered call
 //   - the error from DialOutbound
-func dial(service *Service) (telephony.Call, error) {
-	return service.DialOutbound(context.Background(), telephony.OutboundRequest{
+func dial(t *testing.T, service *Service) (telephony.Call, error) {
+	t.Helper()
+	return service.DialOutbound(t.Context(), telephony.OutboundRequest{
 		TrunkID:  "ST_test",
 		From:     "+15550000001",
 		To:       "+15550000003",
@@ -241,7 +254,7 @@ func dial(service *Service) (telephony.Call, error) {
 
 func TestDialOutboundPlacesCall(t *testing.T) {
 	fake := &fakeLiveKit{}
-	call, err := dial(testService(t, fake, &fakeMedia{}))
+	call, err := dial(t, testService(t, fake, &fakeMedia{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +282,7 @@ func TestDialOutboundPlacesCall(t *testing.T) {
 func TestDialOutboundHangsUpWhenDialFails(t *testing.T) {
 	fake := &fakeLiveKit{dialFails: true}
 	media := &fakeMedia{}
-	if _, err := dial(testService(t, fake, media)); err == nil {
+	if _, err := dial(t, testService(t, fake, media)); err == nil {
 		t.Fatal("expected a dial error")
 	}
 
@@ -284,7 +297,7 @@ func TestDialOutboundHangsUpWhenDialFails(t *testing.T) {
 func TestDialOutboundHangsUpWhenAudioFails(t *testing.T) {
 	fake := &fakeLiveKit{}
 	media := &fakeMedia{readyErr: errors.New("no audio")}
-	if _, err := dial(testService(t, fake, media)); err == nil {
+	if _, err := dial(t, testService(t, fake, media)); err == nil {
 		t.Fatal("expected an audio error")
 	}
 
@@ -300,7 +313,7 @@ func TestAttachInboundReadsCallNumbers(t *testing.T) {
 	fake := &fakeLiveKit{participant: phoneParticipant()}
 	service := testService(t, fake, &fakeMedia{})
 
-	call, err := service.AttachInbound(context.Background(), telephony.InboundRequest{RoomName: testRoomName, ParticipantIdentity: testPhone})
+	call, err := service.AttachInbound(t.Context(), telephony.InboundRequest{RoomName: testRoomName, ParticipantIdentity: testPhone})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +339,7 @@ func TestAttachInboundKeepsCallerWhenAudioFails(t *testing.T) {
 	media := &fakeMedia{readyErr: errors.New("no audio")}
 	service := testService(t, fake, media)
 
-	_, err := service.AttachInbound(context.Background(), telephony.InboundRequest{RoomName: testRoomName, ParticipantIdentity: testPhone})
+	_, err := service.AttachInbound(t.Context(), telephony.InboundRequest{RoomName: testRoomName, ParticipantIdentity: testPhone})
 	if err == nil {
 		t.Fatal("expected an audio error")
 	}
@@ -344,7 +357,7 @@ func TestAttachInboundRejectsNonPhoneParticipant(t *testing.T) {
 	participant.Kind = livekit.ParticipantInfo_STANDARD
 	service := testService(t, &fakeLiveKit{participant: participant}, &fakeMedia{})
 
-	_, err := service.AttachInbound(context.Background(), telephony.InboundRequest{RoomName: testRoomName, ParticipantIdentity: testPhone})
+	_, err := service.AttachInbound(t.Context(), telephony.InboundRequest{RoomName: testRoomName, ParticipantIdentity: testPhone})
 	if err == nil || !strings.Contains(err.Error(), "not a phone call") {
 		t.Fatalf("expected a not-a-phone error, got %v", err)
 	}
@@ -352,12 +365,12 @@ func TestAttachInboundRejectsNonPhoneParticipant(t *testing.T) {
 
 func TestSendDTMFPressesKeys(t *testing.T) {
 	media := &fakeMedia{}
-	call, err := dial(testService(t, &fakeLiveKit{}, media))
+	call, err := dial(t, testService(t, &fakeLiveKit{}, media))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := call.SendDTMF(context.Background(), "09*#ABCD"); err != nil {
+	if err := call.SendDTMF(t.Context(), "09*#ABCD"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -371,12 +384,12 @@ func TestSendDTMFPressesKeys(t *testing.T) {
 
 func TestSendDTMFRejectsInvalidKeyBeforeSending(t *testing.T) {
 	media := &fakeMedia{}
-	call, err := dial(testService(t, &fakeLiveKit{}, media))
+	call, err := dial(t, testService(t, &fakeLiveKit{}, media))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := call.SendDTMF(context.Background(), "12x"); err == nil {
+	if err := call.SendDTMF(t.Context(), "12x"); err == nil {
 		t.Fatal("expected an error for an invalid key")
 	}
 	if len(media.digits) != 0 {
@@ -387,12 +400,12 @@ func TestSendDTMFRejectsInvalidKeyBeforeSending(t *testing.T) {
 func TestEndRemovesPhoneAndLeavesRoom(t *testing.T) {
 	fake := &fakeLiveKit{}
 	media := &fakeMedia{}
-	call, err := dial(testService(t, fake, media))
+	call, err := dial(t, testService(t, fake, media))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := call.End(context.Background()); err != nil {
+	if err := call.End(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -409,13 +422,13 @@ func TestEndRemovesPhoneAndLeavesRoom(t *testing.T) {
 
 func TestEndSucceedsWhenPhoneAlreadyLeft(t *testing.T) {
 	fake := &fakeLiveKit{}
-	call, err := dial(testService(t, fake, &fakeMedia{}))
+	call, err := dial(t, testService(t, fake, &fakeMedia{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fake.phoneGone = true
-	if err := call.End(context.Background()); err != nil {
+	if err := call.End(t.Context()); err != nil {
 		t.Fatalf("expected a hung-up call to end without error, got %v", err)
 	}
 }

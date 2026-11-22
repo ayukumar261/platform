@@ -16,19 +16,21 @@ import (
 	"time"
 )
 
-var requiredVariables = []string{
-	"LIVEKIT_URL",
-	"LIVEKIT_API_KEY",
-	"LIVEKIT_API_SECRET",
-	"KAMAILIO_HOST",
-	"KAMAILIO_PORT",
-	"CARTESIA_API_KEY",
-	"CARTESIA_INBOUND_AGENT_ID",
-	"CARTESIA_OUTBOUND_AGENT_ID",
-	"BRIDGE_PORT",
-	"BRIDGE_API_TOKEN",
+// Test Environment
+var testEnvironment = []struct{ name, value string }{
+	{"LIVEKIT_URL", "ws://127.0.0.1:7880"},
+	{"LIVEKIT_API_KEY", "test-api-key"},
+	{"LIVEKIT_API_SECRET", "test-api-secret"},
+	{"KAMAILIO_HOST", "kamailio"},
+	{"KAMAILIO_PORT", "5070"},
+	{"CARTESIA_API_KEY", "test-cartesia-key"},
+	{"CARTESIA_INBOUND_AGENT_ID", "test-inbound-agent"},
+	{"CARTESIA_OUTBOUND_AGENT_ID", "test-outbound-agent"},
+	{"BRIDGE_PORT", "0"},
+	{"BRIDGE_API_TOKEN", "test-bridge-token"},
 }
 
+// Test Configuration
 var testConfiguration = Configuration{
 	LiveKitURL:              "ws://127.0.0.1:7880",
 	LiveKitAPIKey:           "test-api-key",
@@ -42,22 +44,15 @@ var testConfiguration = Configuration{
 	BridgeAPIToken:          "test-bridge-token",
 }
 
-// setTestEnvironment sets every required variable from testConfiguration.
+// setTestEnvironment sets every required variable from testEnvironment.
 //
 // Parameters:
 //   - t: restores the variables when the test ends
 func setTestEnvironment(t *testing.T) {
 	t.Helper()
-	t.Setenv("LIVEKIT_URL", testConfiguration.LiveKitURL)
-	t.Setenv("LIVEKIT_API_KEY", testConfiguration.LiveKitAPIKey)
-	t.Setenv("LIVEKIT_API_SECRET", testConfiguration.LiveKitAPISecret)
-	t.Setenv("KAMAILIO_HOST", testConfiguration.KamailioHost)
-	t.Setenv("KAMAILIO_PORT", testConfiguration.KamailioPort)
-	t.Setenv("CARTESIA_API_KEY", testConfiguration.CartesiaAPIKey)
-	t.Setenv("CARTESIA_INBOUND_AGENT_ID", testConfiguration.CartesiaInboundAgentID)
-	t.Setenv("CARTESIA_OUTBOUND_AGENT_ID", testConfiguration.CartesiaOutboundAgentID)
-	t.Setenv("BRIDGE_PORT", testConfiguration.BridgePort)
-	t.Setenv("BRIDGE_API_TOKEN", testConfiguration.BridgeAPIToken)
+	for _, variable := range testEnvironment {
+		t.Setenv(variable.name, variable.value)
+	}
 }
 
 // clearTestEnvironment unsets every required variable.
@@ -66,9 +61,9 @@ func setTestEnvironment(t *testing.T) {
 //   - t: restores the variables when the test ends
 func clearTestEnvironment(t *testing.T) {
 	t.Helper()
-	for _, name := range requiredVariables {
-		t.Setenv(name, "")
-		if err := os.Unsetenv(name); err != nil {
+	for _, variable := range testEnvironment {
+		t.Setenv(variable.name, "")
+		if err := os.Unsetenv(variable.name); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -97,7 +92,8 @@ func TestLoadConfigurationWithoutEnvironmentFile(t *testing.T) {
 }
 
 func TestLoadConfigurationRequiresEveryVariable(t *testing.T) {
-	for _, name := range requiredVariables {
+	for _, variable := range testEnvironment {
+		name := variable.name
 		for _, state := range []string{"unset", "empty", "whitespace"} {
 			t.Run(name+"/"+state, func(t *testing.T) {
 				setTestEnvironment(t)
@@ -130,9 +126,9 @@ func TestLoadConfigurationReportsAllMissingVariables(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for missing configuration")
 	}
-	for _, name := range requiredVariables {
-		if !strings.Contains(err.Error(), name) {
-			t.Errorf("error does not name %s", name)
+	for _, variable := range testEnvironment {
+		if !strings.Contains(err.Error(), variable.name) {
+			t.Errorf("error does not name %s", variable.name)
 		}
 	}
 }
@@ -142,18 +138,11 @@ func TestLoadConfigurationFromFile(t *testing.T) {
 		t.Run(override, func(t *testing.T) {
 			clearTestEnvironment(t)
 			environmentFile := filepath.Join(t.TempDir(), ".env")
-			contents := strings.Join([]string{
-				"LIVEKIT_URL=ws://127.0.0.1:7880",
-				"LIVEKIT_API_KEY=test-api-key",
-				"LIVEKIT_API_SECRET=test-api-secret",
-				"KAMAILIO_HOST=kamailio",
-				"KAMAILIO_PORT=5070",
-				"CARTESIA_API_KEY=test-cartesia-key",
-				"CARTESIA_INBOUND_AGENT_ID=test-inbound-agent",
-				"CARTESIA_OUTBOUND_AGENT_ID=test-outbound-agent",
-				"BRIDGE_PORT=0",
-				"BRIDGE_API_TOKEN=test-bridge-token",
-			}, "\n")
+			var lines []string
+			for _, variable := range testEnvironment {
+				lines = append(lines, variable.name+"="+variable.value)
+			}
+			contents := strings.Join(lines, "\n")
 			if err := os.WriteFile(environmentFile, []byte(contents), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -211,9 +200,9 @@ func TestMainExitsOnMissingConfiguration(t *testing.T) {
 	if exitError, ok := err.(*exec.ExitError); !ok || exitError.ExitCode() != 1 {
 		t.Fatalf("expected exit code 1, got %v", err)
 	}
-	for _, name := range requiredVariables {
-		if !strings.Contains(string(output), name) {
-			t.Errorf("startup error does not name %s", name)
+	for _, variable := range testEnvironment {
+		if !strings.Contains(string(output), variable.name) {
+			t.Errorf("startup error does not name %s", variable.name)
 		}
 	}
 }
@@ -225,23 +214,23 @@ func TestMainExitsWhenSetupFails(t *testing.T) {
 		body        string
 		unavailable bool
 		hang        bool
-		wantLog     string
+		expectedLog string
 	}{
 		{
-			name:    "invalid credentials",
-			status:  http.StatusUnauthorized,
-			body:    `{"code":"unauthenticated","msg":"invalid API credentials"}`,
-			wantLog: "invalid API credentials",
+			name:        "invalid credentials",
+			status:      http.StatusUnauthorized,
+			body:        `{"code":"unauthenticated","msg":"invalid API credentials"}`,
+			expectedLog: "invalid API credentials",
 		},
 		{
 			name:        "server unavailable",
 			unavailable: true,
-			wantLog:     "connection refused",
+			expectedLog: "connection refused",
 		},
 		{
-			name:    "server timeout",
-			hang:    true,
-			wantLog: "context deadline exceeded",
+			name:        "server timeout",
+			hang:        true,
+			expectedLog: "context deadline exceeded",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -274,8 +263,8 @@ func TestMainExitsWhenSetupFails(t *testing.T) {
 			if strings.Contains(string(output), "setup succeeded") {
 				t.Errorf("failed startup reported success: %s", output)
 			}
-			if !strings.Contains(string(output), test.wantLog) {
-				t.Errorf("expected log containing %q, got: %s", test.wantLog, output)
+			if !strings.Contains(string(output), test.expectedLog) {
+				t.Errorf("expected log containing %q, got: %s", test.expectedLog, output)
 			}
 			if test.hang && time.Since(started) < 5*time.Second {
 				t.Error("startup timed out before the five-second deadline")

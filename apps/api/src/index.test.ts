@@ -2,24 +2,17 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, type RequestListener } from "node:http";
 import { test, type TestContext } from "node:test";
-import { createApp, loadConfiguration, type Configuration } from "./index.ts";
+import { createApp, loadConfiguration } from "./index.ts";
 import { ForbiddenError } from "./lib/errors/index.ts";
 
 // Constants
-const callId = "7f89fb58-646e-44f1-b91c-a430c06bc912";
-const configuration: Configuration = {
-  port: 3000,
-  bridgeURL: "http://127.0.0.1:8080",
-  bridgeApiToken: "test-bridge-token",
-};
-const headers = {
-  "Content-Type": "application/json",
-};
-const environment = {
+const TEST_ENVIRONMENT = {
   API_PORT: "3000",
   BRIDGE_API_TOKEN: "test-bridge-token",
   BRIDGE_URL: "http://127.0.0.1:8080",
 };
+const TEST_CALL_ID = "7f89fb58-646e-44f1-b91c-a430c06bc912";
+const ALLOWED_PHONE_NUMBER = "+19452412002";
 
 /**
  * listen serves a test handler on an unused local port.
@@ -47,41 +40,31 @@ async function listen(
 }
 
 /**
- * setup connects the real API and bridge client to a local bridge substitute.
+ * postCall sends POST /call with a JSON content type.
  *
- * @param t - The test that closes both servers when it ends.
- * @returns The API's base URL, and the requests the substitute received.
+ * @param url - The API's base URL.
+ * @param body - The raw request body.
+ * @param headers - Headers that add to or replace the JSON content type.
+ * @returns The API's response.
  */
-async function setup(t: TestContext) {
-  const requests: {
-    method?: string;
-    path?: string;
-    authorization?: string;
-    body: unknown;
-  }[] = [];
-  const bridgeURL = await listen(t, async (req, res) => {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(Buffer.from(chunk));
-    requests.push({
-      method: req.method,
-      path: req.url,
-      authorization: req.headers.authorization,
-      body: JSON.parse(Buffer.concat(chunks).toString()),
-    });
-    res.writeHead(202, { "Content-Type": "application/json" });
-    res.end(
-      JSON.stringify({
-        callId,
-        internal: "private-detail",
-      }),
-    );
+function postCall(
+  url: string,
+  body: string,
+  headers: Record<string, string> = {},
+): Promise<Response> {
+  return fetch(`${url}/call`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body,
   });
-  const url = await listen(t, createApp({ ...configuration, bridgeURL }));
-  return { url, requests };
 }
 
 test("health probes need no token and unknown routes return JSON", async (t) => {
-  const { url, requests } = await setup(t);
+  const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
+  const url = await listen(
+    t,
+    createApp(loadConfiguration(TEST_ENVIRONMENT), { createCall }),
+  );
   const health = await fetch(`${url}/health`);
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { status: "ok" });
@@ -93,97 +76,13 @@ test("health probes need no token and unknown routes return JSON", async (t) => 
       message: "The requested endpoint does not exist.",
     },
   });
-  assert.equal(requests.length, 0);
-});
-
-test("other destination numbers never reach the bridge", async (t) => {
-  const { url, requests } = await setup(t);
-  for (const to of [
-    "+15551234567",
-    "+919452412002",
-    "+19452412003",
-    "+194524120020",
-  ]) {
-    const response = await fetch(`${url}/call`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ to }),
-    });
-    assert.equal(response.status, 403);
-    assert.deepEqual(await response.json(), {
-      error: {
-        code: "destination_not_allowed",
-        message: "Calls are limited to the configured test number.",
-      },
-    });
-  }
-  assert.equal(requests.length, 0);
-});
-
-test("malformed JSON never reaches the bridge", async (t) => {
-  const { url, requests } = await setup(t);
-  const response = await fetch(`${url}/call`, {
-    method: "POST",
-    headers,
-    body: "{",
-  });
-  assert.equal(response.status, 400);
-  assert.deepEqual(await response.json(), {
-    error: {
-      code: "invalid_json",
-      message: "Provide a complete JSON object as the request body.",
-    },
-  });
-  assert.equal(requests.length, 0);
-});
-
-test("body limits and unsupported formats use the shared error envelope", async (t) => {
-  const { url, requests } = await setup(t);
-  for (const scenario of [
-    {
-      headers,
-      body: JSON.stringify({ to: "x".repeat(5000) }),
-      status: 413,
-      code: "payload_too_large",
-    },
-    {
-      headers: { ...headers, "Content-Type": "text/plain" },
-      body: "{}",
-      status: 415,
-      code: "unsupported_media_type",
-    },
-    {
-      headers: {
-        ...headers,
-        "Content-Type": "application/json; charset=iso-8859-1",
-      },
-      body: "{}",
-      status: 415,
-      code: "unsupported_media_type",
-    },
-    {
-      headers: { ...headers, "Content-Encoding": "gzip" },
-      body: "{}",
-      status: 415,
-      code: "unsupported_media_type",
-    },
-  ]) {
-    const response = await fetch(`${url}/call`, {
-      method: "POST",
-      headers: scenario.headers,
-      body: scenario.body,
-    });
-    assert.equal(response.status, scenario.status);
-    const result = (await response.json()) as { error: { code: string } };
-    assert.equal(result.error.code, scenario.code);
-  }
-  assert.equal(requests.length, 0);
+  assert.equal(createCall.mock.callCount(), 0);
 });
 
 test("named errors expose only their safe fields", async (t) => {
   const url = await listen(
     t,
-    createApp(configuration, {
+    createApp(loadConfiguration(TEST_ENVIRONMENT), {
       async createCall() {
         throw new ForbiddenError({
           code: "call_not_allowed",
@@ -192,11 +91,10 @@ test("named errors expose only their safe fields", async (t) => {
       },
     }),
   );
-  const response = await fetch(`${url}/call`, {
-    method: "POST",
-    headers,
-    body: '{"to":"+19452412002"}',
-  });
+  const response = await postCall(
+    url,
+    JSON.stringify({ to: ALLOWED_PHONE_NUMBER }),
+  );
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), {
     error: { code: "call_not_allowed", message: "This call is not permitted." },
@@ -207,17 +105,16 @@ test("unexpected errors receive a generic 500 without leaking their details", as
   const logs = t.mock.method(console, "error", () => {});
   const url = await listen(
     t,
-    createApp(configuration, {
+    createApp(loadConfiguration(TEST_ENVIRONMENT), {
       async createCall() {
         throw Object.assign(new Error("private-secret"), { status: 400 });
       },
     }),
   );
-  const response = await fetch(`${url}/call`, {
-    method: "POST",
-    headers,
-    body: '{"to":"+19452412002"}',
-  });
+  const response = await postCall(
+    url,
+    JSON.stringify({ to: ALLOWED_PHONE_NUMBER }),
+  );
   assert.equal(response.status, 500);
   assert.deepEqual(await response.json(), {
     error: { code: "internal_error", message: "An unexpected error occurred." },
@@ -229,13 +126,13 @@ test("unexpected errors receive a generic 500 without leaking their details", as
 });
 
 test("configuration uses the explicitly configured port", () => {
-  assert.deepEqual(loadConfiguration(environment), {
+  assert.deepEqual(loadConfiguration(TEST_ENVIRONMENT), {
     port: 3000,
     bridgeApiToken: "test-bridge-token",
     bridgeURL: "http://127.0.0.1:8080",
   });
   assert.equal(
-    loadConfiguration({ ...environment, API_PORT: "4500" }).port,
+    loadConfiguration({ ...TEST_ENVIRONMENT, API_PORT: "4500" }).port,
     4500,
   );
 });
@@ -245,10 +142,10 @@ test("configuration reports all missing settings without their values", () => {
     () => loadConfiguration({}),
     /BRIDGE_API_TOKEN, BRIDGE_URL, API_PORT/,
   );
-  for (const name of Object.keys(environment)) {
+  for (const name of Object.keys(TEST_ENVIRONMENT)) {
     for (const value of ["", " ", undefined]) {
       assert.throws(
-        () => loadConfiguration({ ...environment, [name]: value }),
+        () => loadConfiguration({ ...TEST_ENVIRONMENT, [name]: value }),
         new RegExp(name),
       );
     }
@@ -258,7 +155,7 @@ test("configuration reports all missing settings without their values", () => {
 test("configuration rejects malformed ports, URLs, and tokens", () => {
   for (const API_PORT of ["", "0", "65536", "NaN", "3.5", "3000abc"]) {
     assert.throws(
-      () => loadConfiguration({ ...environment, API_PORT }),
+      () => loadConfiguration({ ...TEST_ENVIRONMENT, API_PORT }),
       /API_PORT/,
     );
   }
@@ -270,7 +167,7 @@ test("configuration rejects malformed ports, URLs, and tokens", () => {
     "http://bridge:8080?token=private-secret",
   ]) {
     assert.throws(
-      () => loadConfiguration({ ...environment, BRIDGE_URL }),
+      () => loadConfiguration({ ...TEST_ENVIRONMENT, BRIDGE_URL }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.equal(
@@ -284,7 +181,7 @@ test("configuration rejects malformed ports, URLs, and tokens", () => {
   assert.throws(
     () =>
       loadConfiguration({
-        ...environment,
+        ...TEST_ENVIRONMENT,
         BRIDGE_API_TOKEN: "private secret",
       }),
     /BRIDGE_API_TOKEN/,

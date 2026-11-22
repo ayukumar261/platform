@@ -22,10 +22,10 @@ func TestNewLiveKitSIPClient(t *testing.T) {
 
 	for _, scheme := range []string{"http", "ws"} {
 		t.Run(scheme, func(t *testing.T) {
-			want := &livekit.ListSIPInboundTrunkResponse{
+			expected := &livekit.ListSIPInboundTrunkResponse{
 				Items: []*livekit.SIPInboundTrunkInfo{{SipTrunkId: "test-trunk"}},
 			}
-			body, err := proto.Marshal(want)
+			body, err := proto.Marshal(expected)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -79,12 +79,12 @@ func TestNewLiveKitSIPClient(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			got, err := client.ListSIPInboundTrunk(ctx, &livekit.ListSIPInboundTrunkRequest{})
+			trunks, err := client.ListSIPInboundTrunk(ctx, &livekit.ListSIPInboundTrunkRequest{})
 			if err != nil {
 				t.Fatalf("list inbound trunks: %v", err)
 			}
-			if !proto.Equal(got, want) {
-				t.Fatalf("unexpected trunks: got %v, want %v", got, want)
+			if !proto.Equal(trunks, expected) {
+				t.Fatalf("expected trunks %v, got %v", expected, trunks)
 			}
 		})
 	}
