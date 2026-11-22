@@ -15,7 +15,7 @@ const (
 	roomPrefix       = "call-"
 
 	// TODO: Remove for PostgreSQL-backed phone numbers
-	phoneNumber = "+17627013110"
+	phoneNumber = "+16692011081"
 )
 
 // Setup makes sure LiveKit accepts calls to phoneNumber and places each one

@@ -13,7 +13,7 @@ const (
 	trunkName = "outbound"
 
 	// TODO: Remove for PostgreSQL-backed phone numbers
-	phoneNumber = "+17627013110"
+	phoneNumber = "+16692011081"
 )
 
 // Carriers
