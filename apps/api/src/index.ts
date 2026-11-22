@@ -2,7 +2,8 @@ import process from "node:process";
 import express from "express";
 import { BridgeClient } from "./clients/bridge.ts";
 import type { Bridge } from "./clients/bridge.types.ts";
-import { createDatabase } from "./clients/database.ts";
+import { createDatabase, type Database } from "./clients/database.ts";
+import { createAgent } from "./handlers/agents/http.ts";
 import { createCall } from "./handlers/calls/http.ts";
 import { NotFoundError } from "./lib/errors/index.ts";
 import { errorHandler } from "./lib/errors/handler.ts";
@@ -19,7 +20,7 @@ function main(): void {
   const configuration = loadConfiguration();
   const database = createDatabase(configuration.databaseURL);
 
-  const app = createApp(configuration);
+  const app = createApp(configuration, database);
 
   // Start the HTTP server
   const server = app.listen(configuration.port, () => {
@@ -117,11 +118,13 @@ export function loadConfiguration(
  * substitute, so checking the API cannot accidentally place a real call.
  *
  * @param configuration - Validated settings for this process.
+ * @param database - The PostgreSQL database that stores agents.
  * @param bridge - An optional bridge substitute for tests.
  * @returns The configured Express application.
  */
 export function createApp(
   configuration: Configuration,
+  database: Database,
   bridge: Bridge = new BridgeClient(
     configuration.bridgeURL,
     configuration.bridgeApiToken,
@@ -140,6 +143,13 @@ export function createApp(
     "/call",
     express.json({ limit: "4kb", inflate: false }),
     createCall(bridge),
+  );
+
+  // Read agent requests before checking their fields
+  app.post(
+    "/agents",
+    express.json({ limit: "4kb", inflate: false }),
+    createAgent(database),
   );
 
   // Report unmatched routes using the same error format

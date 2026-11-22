@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, type RequestListener } from "node:http";
 import { test, type TestContext } from "node:test";
+import { createDatabase } from "../../clients/database.ts";
 import { createApp, loadConfiguration } from "../../index.ts";
 
 // Constants
@@ -13,6 +14,7 @@ const TEST_ENVIRONMENT = {
 };
 const TEST_CALL_ID = "7f89fb58-646e-44f1-b91c-a430c06bc912";
 const ALLOWED_PHONE_NUMBER = "+19452412002";
+const DATABASE = createDatabase(TEST_ENVIRONMENT.DATABASE_URL);
 
 /**
  * listen serves a test handler on an unused local port.
@@ -88,6 +90,7 @@ test("POST /call accepts the allowed number without a caller token and authentic
     t,
     createApp(
       loadConfiguration({ ...TEST_ENVIRONMENT, BRIDGE_URL: bridgeURL }),
+      DATABASE,
     ),
   );
   const response = await postCall(
@@ -111,7 +114,7 @@ test("POST /call rejects other destination numbers with HTTP 403 before contacti
   const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), { createCall }),
+    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, { createCall }),
   );
 
   // Check numbers that are close to the allowed number
@@ -137,7 +140,7 @@ test("POST /call rejects invalid input with HTTP 400 before contacting the bridg
   const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), { createCall }),
+    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, { createCall }),
   );
 
   // Check empty bodies, malformed JSON, and a schema validation failure
@@ -161,7 +164,7 @@ test("POST /call rejects oversized and unsupported bodies before contacting the 
   const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), { createCall }),
+    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, { createCall }),
   );
 
   const scenarios: {

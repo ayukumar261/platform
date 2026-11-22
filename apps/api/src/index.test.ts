@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, type RequestListener } from "node:http";
 import { test, type TestContext } from "node:test";
+import { createDatabase } from "./clients/database.ts";
 import { createApp, loadConfiguration } from "./index.ts";
 import { ForbiddenError } from "./lib/errors/index.ts";
 
@@ -14,6 +15,7 @@ const TEST_ENVIRONMENT = {
 };
 const TEST_CALL_ID = "7f89fb58-646e-44f1-b91c-a430c06bc912";
 const ALLOWED_PHONE_NUMBER = "+19452412002";
+const DATABASE = createDatabase(TEST_ENVIRONMENT.DATABASE_URL);
 
 /**
  * listen serves a test handler on an unused local port.
@@ -64,7 +66,7 @@ test("health probes need no token and unknown routes return JSON", async (t) => 
   const createCall = t.mock.fn(async () => ({ callId: TEST_CALL_ID }));
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), { createCall }),
+    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, { createCall }),
   );
   const health = await fetch(`${url}/health`);
   assert.equal(health.status, 200);
@@ -83,7 +85,7 @@ test("health probes need no token and unknown routes return JSON", async (t) => 
 test("named errors expose only their safe fields", async (t) => {
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), {
+    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, {
       async createCall() {
         throw new ForbiddenError({
           code: "call_not_allowed",
@@ -106,7 +108,7 @@ test("unexpected errors receive a generic 500 without leaking their details", as
   const logs = t.mock.method(console, "error", () => {});
   const url = await listen(
     t,
-    createApp(loadConfiguration(TEST_ENVIRONMENT), {
+    createApp(loadConfiguration(TEST_ENVIRONMENT), DATABASE, {
       async createCall() {
         throw Object.assign(new Error("private-secret"), { status: 400 });
       },

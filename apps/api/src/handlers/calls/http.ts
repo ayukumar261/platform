@@ -11,12 +11,12 @@ import { parseCreateCallRequest } from "./schema.ts";
 const ALLOWED_PHONE_NUMBER = "+19452412002";
 
 /**
- * createCall handles POST /call with { "to": "+19452412002" }.
+ * createCall handles POST /call, which asks the bridge to call a number.
  *
  * The steps are:
  * 1. Check the body format and destination number.
  * 2. Require the owner's test number as the destination.
- * 3. Ask the bridge to accept the call and return HTTP 202 with { callId }.
+ * 3. Ask the bridge to accept the call and return HTTP 202 with the call ID.
  *
  * This development endpoint has no caller authentication. Anyone who can
  * reach it can request a call, but only to the number allowed above.
