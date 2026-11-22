@@ -24,22 +24,20 @@ var testEnvironment = []struct{ name, value string }{
 	{"KAMAILIO_HOST", "kamailio"},
 	{"KAMAILIO_PORT", "5070"},
 	{"CARTESIA_API_KEY", "test-cartesia-key"},
-	{"CARTESIA_INBOUND_AGENT_ID", "test-inbound-agent"},
 	{"BRIDGE_PORT", "0"},
 	{"BRIDGE_API_TOKEN", "test-bridge-token"},
 }
 
 // Test Configuration
 var testConfiguration = Configuration{
-	LiveKitURL:             "ws://127.0.0.1:7880",
-	LiveKitAPIKey:          "test-api-key",
-	LiveKitAPISecret:       "test-api-secret",
-	KamailioHost:           "kamailio",
-	KamailioPort:           "5070",
-	CartesiaAPIKey:         "test-cartesia-key",
-	CartesiaInboundAgentID: "test-inbound-agent",
-	BridgePort:             "0",
-	BridgeAPIToken:         "test-bridge-token",
+	LiveKitURL:       "ws://127.0.0.1:7880",
+	LiveKitAPIKey:    "test-api-key",
+	LiveKitAPISecret: "test-api-secret",
+	KamailioHost:     "kamailio",
+	KamailioPort:     "5070",
+	CartesiaAPIKey:   "test-cartesia-key",
+	BridgePort:       "0",
+	BridgeAPIToken:   "test-bridge-token",
 }
 
 // setTestEnvironment sets every required variable from testEnvironment.

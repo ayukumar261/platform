@@ -92,7 +92,7 @@ func TestDialUsesTwilioAndPreservesAcceptedCallID(t *testing.T) {
 			return nil, failed
 		},
 	}
-	bridge := New(calls, fakeAgent(nil), "inbound-agent", map[string]string{"twilio": "ST_twilio"})
+	bridge := New(calls, fakeAgent(nil), map[string]string{"twilio": "ST_twilio"})
 	request := outbound.Request{CallID: "test-call", To: "+15551234567", Provider: "test", ProviderAgentID: "outbound-agent"}
 	if err := bridge.Dial(t.Context(), "twilio", request); !errors.Is(err, failed) {
 		t.Fatalf("expected the dial failure, got %v", err)
@@ -109,7 +109,7 @@ func TestDialRejectsUnknownCarrierBeforeDialing(t *testing.T) {
 			return nil, nil
 		},
 	}
-	bridge := New(calls, fakeAgent(nil), "inbound-agent", map[string]string{"twilio": "ST_twilio"})
+	bridge := New(calls, fakeAgent(nil), map[string]string{"twilio": "ST_twilio"})
 	if err := bridge.Dial(t.Context(), "unknown", outbound.Request{Provider: "test"}); err == nil {
 		t.Fatal("expected an error for an unknown carrier")
 	}
@@ -122,7 +122,7 @@ func TestDialRejectsUnknownProviderBeforeDialing(t *testing.T) {
 			return nil, nil
 		},
 	}
-	bridge := New(calls, fakeAgent(nil), "inbound-agent", map[string]string{"twilio": "ST_twilio"})
+	bridge := New(calls, fakeAgent(nil), map[string]string{"twilio": "ST_twilio"})
 	request := outbound.Request{CallID: "test-call", To: "+15551234567", Provider: "unknown", ProviderAgentID: "outbound-agent"}
 	if err := bridge.Dial(t.Context(), "twilio", request); err == nil {
 		t.Fatal("expected an error for an unknown provider")
@@ -159,12 +159,16 @@ func TestCallsUseMatchingAgentAndHangUpIfAgentSetupFails(t *testing.T) {
 
 			// Check the selected agent as the bridge requests its session
 			provider := fakeAgent(func(_ context.Context, config agents.SessionConfig) (agents.Session, error) {
-				if config.AgentID != direction+"-agent" || config.Audio != relay.AudioFormat {
+				agentID := inboundAgentID
+				if direction == "outbound" {
+					agentID = "outbound-agent"
+				}
+				if config.AgentID != agentID || config.Audio != relay.AudioFormat {
 					t.Fatalf("unexpected agent configuration: %+v", config)
 				}
 				return nil, failed
 			})
-			bridge := New(calls, provider, "inbound-agent", map[string]string{"twilio": "ST_twilio"})
+			bridge := New(calls, provider, map[string]string{"twilio": "ST_twilio"})
 			var err error
 			if direction == "inbound" {
 				err = bridge.Answer(t.Context(), incoming)

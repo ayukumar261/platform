@@ -13,11 +13,14 @@ import (
 	"bridge/internal/telephony"
 )
 
+// Constants
+// TODO: Delete when inbound calls choose their own agent
+const inboundAgentID = "agent_41pN1ypfNG7t3egkf9rLKq"
+
 type Bridge struct {
-	calls          telephony.Service
-	agents         agents.Provider
-	inboundAgentID string
-	trunkIDs       map[string]string
+	calls    telephony.Service
+	agents   agents.Provider
+	trunkIDs map[string]string
 }
 
 // New prepares the bridge for inbound and outbound calls without starting a call.
@@ -25,17 +28,15 @@ type Bridge struct {
 // Parameters:
 //   - calls: attaches incoming calls and dials outgoing calls
 //   - provider: creates the agent session for each call
-//   - inboundAgentID: the agent that answers incoming calls
 //   - trunkIDs: each carrier's outbound trunk ID, prepared during startup
 //
 // Returns:
 //   - a bridge ready to answer and dial calls
-func New(calls telephony.Service, provider agents.Provider, inboundAgentID string, trunkIDs map[string]string) *Bridge {
+func New(calls telephony.Service, provider agents.Provider, trunkIDs map[string]string) *Bridge {
 	return &Bridge{
-		calls:          calls,
-		agents:         provider,
-		inboundAgentID: inboundAgentID,
-		trunkIDs:       trunkIDs,
+		calls:    calls,
+		agents:   provider,
+		trunkIDs: trunkIDs,
 	}
 }
 
@@ -57,7 +58,7 @@ func (b *Bridge) Answer(ctx context.Context, request telephony.InboundRequest) e
 		return fmt.Errorf("attach inbound call: %w", err)
 	}
 
-	return b.talk(ctx, call, b.inboundAgentID)
+	return b.talk(ctx, call, inboundAgentID)
 }
 
 // Dial calls a number through a carrier, connects the requested agent, and

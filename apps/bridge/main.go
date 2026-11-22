@@ -27,15 +27,14 @@ import (
 )
 
 type Configuration struct {
-	LiveKitURL             string
-	LiveKitAPIKey          string
-	LiveKitAPISecret       string
-	KamailioHost           string
-	KamailioPort           string
-	CartesiaAPIKey         string
-	CartesiaInboundAgentID string
-	BridgePort             string
-	BridgeAPIToken         string
+	LiveKitURL       string
+	LiveKitAPIKey    string
+	LiveKitAPISecret string
+	KamailioHost     string
+	KamailioPort     string
+	CartesiaAPIKey   string
+	BridgePort       string
+	BridgeAPIToken   string
 }
 
 func main() {
@@ -75,7 +74,6 @@ func main() {
 	bridge := bridge.New(
 		livekit.New(configuration.LiveKitURL, configuration.LiveKitAPIKey, configuration.LiveKitAPISecret),
 		cartesia.New(configuration.CartesiaAPIKey),
-		configuration.CartesiaInboundAgentID,
 		trunkIDs,
 	)
 
@@ -167,15 +165,14 @@ func loadConfiguration(environmentFile string) (Configuration, error) {
 
 	// Read every required variable
 	configuration := Configuration{
-		LiveKitURL:             required("LIVEKIT_URL"),
-		LiveKitAPIKey:          required("LIVEKIT_API_KEY"),
-		LiveKitAPISecret:       required("LIVEKIT_API_SECRET"),
-		KamailioHost:           required("KAMAILIO_HOST"),
-		KamailioPort:           required("KAMAILIO_PORT"),
-		CartesiaAPIKey:         required("CARTESIA_API_KEY"),
-		CartesiaInboundAgentID: required("CARTESIA_INBOUND_AGENT_ID"),
-		BridgePort:             required("BRIDGE_PORT"),
-		BridgeAPIToken:         required("BRIDGE_API_TOKEN"),
+		LiveKitURL:       required("LIVEKIT_URL"),
+		LiveKitAPIKey:    required("LIVEKIT_API_KEY"),
+		LiveKitAPISecret: required("LIVEKIT_API_SECRET"),
+		KamailioHost:     required("KAMAILIO_HOST"),
+		KamailioPort:     required("KAMAILIO_PORT"),
+		CartesiaAPIKey:   required("CARTESIA_API_KEY"),
+		BridgePort:       required("BRIDGE_PORT"),
+		BridgeAPIToken:   required("BRIDGE_API_TOKEN"),
 	}
 	if strings.ContainsAny(configuration.BridgeAPIToken, " \t\r\n") {
 		invalid = append(invalid, "BRIDGE_API_TOKEN")
