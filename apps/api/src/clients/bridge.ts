@@ -4,13 +4,11 @@ import {
 } from "../lib/errors/index.ts";
 import type { Bridge } from "./bridge.types.ts";
 
-/** BridgeClient sends call requests to the private Go bridge. */
 export class BridgeClient implements Bridge {
   private readonly url: URL;
   private readonly token: string;
   private readonly timeoutMs: number;
 
-  /** Create a client without contacting the bridge. */
   constructor(url: string, token: string, timeoutMs = 5000) {
     this.url = new URL("/call", url);
     this.token = token;

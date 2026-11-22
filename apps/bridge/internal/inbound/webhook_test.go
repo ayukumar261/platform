@@ -22,7 +22,16 @@ const (
 	testAPISecret = "test-api-secret"
 )
 
-// sendWebhook posts an event signed with secret, and returns the status and answers.
+// sendWebhook signs an event and posts it to the webhook.
+//
+// Parameters:
+//   - t: fails the test if the event cannot be signed
+//   - event: the webhook event to send
+//   - secret: the API secret that signs the event
+//
+// Returns:
+//   - the HTTP status code
+//   - the calls the webhook answered
 func sendWebhook(t *testing.T, event *livekit.WebhookEvent, secret string) (int, []telephony.InboundRequest) {
 	t.Helper()
 	body, err := protojson.Marshal(event)
@@ -51,6 +60,12 @@ func sendWebhook(t *testing.T, event *livekit.WebhookEvent, secret string) (int,
 }
 
 // phoneJoined returns the event LiveKit sends when a phone joins a room.
+//
+// Parameters:
+//   - roomName: the room the phone joins
+//
+// Returns:
+//   - a participant_joined event for a SIP caller
 func phoneJoined(roomName string) *livekit.WebhookEvent {
 	return &livekit.WebhookEvent{
 		Event:       webhook.EventParticipantJoined,

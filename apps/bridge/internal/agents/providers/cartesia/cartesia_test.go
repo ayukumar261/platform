@@ -23,6 +23,13 @@ var testConfig = agents.SessionConfig{
 }
 
 // testProvider points a provider at a local server that runs handler.
+//
+// Parameters:
+//   - t: closes the server when the test ends
+//   - handler: answers each connection in place of Cartesia
+//
+// Returns:
+//   - a provider that connects to the local server
 func testProvider(t *testing.T, handler http.HandlerFunc) *Provider {
 	t.Helper()
 	server := httptest.NewServer(handler)
@@ -34,6 +41,13 @@ func testProvider(t *testing.T, handler http.HandlerFunc) *Provider {
 }
 
 // fakeCartesia accepts a session like Cartesia does, then runs script.
+//
+// Parameters:
+//   - t: reports connection errors and closes the server when the test ends
+//   - script: plays Cartesia's side of the session after session_ready
+//
+// Returns:
+//   - a provider that connects to the fake
 func fakeCartesia(t *testing.T, script func(conn *websocket.Conn)) *Provider {
 	return testProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
@@ -59,6 +73,13 @@ func fakeCartesia(t *testing.T, script func(conn *websocket.Conn)) *Provider {
 }
 
 // start creates and starts a session, and closes it when the test ends.
+//
+// Parameters:
+//   - t: fails the test if the session cannot start
+//   - provider: creates the session with testConfig
+//
+// Returns:
+//   - a started session
 func start(t *testing.T, provider *Provider) agents.Session {
 	t.Helper()
 	session, err := provider.NewSession(t.Context(), testConfig)
@@ -74,12 +95,22 @@ func start(t *testing.T, provider *Provider) agents.Session {
 }
 
 // closeWith closes the connection from Cartesia's side with the given code.
+//
+// Parameters:
+//   - conn: the connection to close
+//   - code: the WebSocket close code to send
 func closeWith(conn *websocket.Conn, code int) {
 	message := websocket.FormatCloseMessage(code, "")
 	conn.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 }
 
 // collect reads events until the session closes them.
+//
+// Parameters:
+//   - session: the session to read from
+//
+// Returns:
+//   - every event, in the order it arrived
 func collect(session agents.Session) []agents.Event {
 	var events []agents.Event
 	for event := range session.Events() {

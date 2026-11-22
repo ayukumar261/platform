@@ -4,7 +4,13 @@ import { createServer, type RequestListener } from "node:http";
 import { test, type TestContext } from "node:test";
 import { createApp } from "../../index.ts";
 
-/** Serve a test handler on an unused local port and close it afterward. */
+/**
+ * listen serves a test handler on an unused local port.
+ *
+ * @param t - The test that closes the server when it ends.
+ * @param handler - Answers each request.
+ * @returns The server's base URL.
+ */
 async function listen(
   t: TestContext,
   handler: RequestListener,

@@ -138,6 +138,18 @@ func main() {
 	log.Print("Bridge stopped")
 }
 
+// loadConfiguration reads the bridge's settings from the environment.
+//
+// The environment file is optional, because Docker supplies the variables
+// directly. Variables that are already set take priority over the file.
+//
+// Parameters:
+//   - environmentFile: the .env file to load first, or "" to skip it
+//
+// Returns:
+//   - the settings, ready to use
+//   - an error naming every missing or invalid variable, or if the
+//     environment file cannot be read
 func loadConfiguration(environmentFile string) (Configuration, error) {
 	// Load the environment file if there is one
 	if environmentFile != "" {

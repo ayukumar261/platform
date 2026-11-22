@@ -24,6 +24,13 @@ type fakeLiveKit struct {
 	calls         []string
 }
 
+// ServeHTTP answers the SIP API requests that Setup makes, like LiveKit does.
+//
+// It records each method in calls, and returns 404 for any other method.
+//
+// Parameters:
+//   - w: receives the encoded response
+//   - r: the SIP API request
 func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := strings.TrimPrefix(r.URL.Path, "/twirp/livekit.SIP/")
 	f.calls = append(f.calls, method)
@@ -70,10 +77,21 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // existingTrunks returns the inbound trunk.
+//
+// Returns:
+//   - the trunk that Setup creates, as LiveKit lists it
 func existingTrunks() []*livekit.SIPInboundTrunkInfo {
 	return []*livekit.SIPInboundTrunkInfo{{SipTrunkId: testTrunkID, Name: trunkName}}
 }
 
+// setup runs Setup against fake.
+//
+// Parameters:
+//   - t: closes the server when the test ends
+//   - fake: answers the SIP API requests
+//
+// Returns:
+//   - the error from Setup
 func setup(t *testing.T, fake *fakeLiveKit) error {
 	t.Helper()
 	fake.t = t

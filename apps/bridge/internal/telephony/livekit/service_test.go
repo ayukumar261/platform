@@ -32,6 +32,14 @@ type fakeLiveKit struct {
 	removed     []*livekit.RoomParticipantIdentity
 }
 
+// ServeHTTP answers the SIP and room requests that Service makes, like LiveKit does.
+//
+// It records each dial and removal, and fails them when dialFails or phoneGone
+// is set.
+//
+// Parameters:
+//   - w: receives the encoded response
+//   - r: the SIP or room request
 func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -80,6 +88,11 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // twirpError replies with a Twirp error, as LiveKit does.
+//
+// Parameters:
+//   - w: receives the error
+//   - status: the HTTP status code
+//   - code: the Twirp error code, such as "not_found"
 func twirpError(w http.ResponseWriter, status int, code string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -93,20 +106,64 @@ type fakeMedia struct {
 	done     chan struct{}
 }
 
+// ReadAudio returns io.EOF, as if the call had ended.
+//
+// Returns:
+//   - nil, because there is no audio
+//   - io.EOF, always
 func (m *fakeMedia) ReadAudio(context.Context) ([]byte, error) { return nil, io.EOF }
-func (m *fakeMedia) WriteAudio(context.Context, []byte) error  { return nil }
-func (m *fakeMedia) ClearAudio(context.Context) error          { return nil }
-func (m *fakeMedia) DrainAudio(context.Context) error          { return nil }
-func (m *fakeMedia) WaitReady(context.Context) error           { return m.readyErr }
-func (m *fakeMedia) Done() <-chan struct{}                     { return m.done }
-func (m *fakeMedia) Err() error                                { return nil }
 
+// WriteAudio drops the audio.
+//
+// Returns:
+//   - nil, always
+func (m *fakeMedia) WriteAudio(context.Context, []byte) error { return nil }
+
+// ClearAudio does nothing.
+//
+// Returns:
+//   - nil, always
+func (m *fakeMedia) ClearAudio(context.Context) error { return nil }
+
+// DrainAudio does nothing.
+//
+// Returns:
+//   - nil, always
+func (m *fakeMedia) DrainAudio(context.Context) error { return nil }
+
+// WaitReady pretends the phone can hear the agent.
+//
+// Returns:
+//   - readyErr, which is nil unless the test sets it
+func (m *fakeMedia) WaitReady(context.Context) error { return m.readyErr }
+
+// Done closes once the service leaves the room.
+//
+// Returns:
+//   - a channel that closes once the service leaves the room
+func (m *fakeMedia) Done() <-chan struct{} { return m.done }
+
+// Err returns nil, because the fake room never fails.
+//
+// Returns:
+//   - nil, always
+func (m *fakeMedia) Err() error { return nil }
+
+// PressKey records the key.
+//
+// Parameters:
+//   - code: the key's DTMF code to record
+//   - digit: the key's character to record
+//
+// Returns:
+//   - nil, always
 func (m *fakeMedia) PressKey(code uint32, digit string) error {
 	m.codes = append(m.codes, code)
 	m.digits = append(m.digits, digit)
 	return nil
 }
 
+// Close leaves the room.
 func (m *fakeMedia) Close() {
 	if !m.closed() {
 		close(m.done)
@@ -114,6 +171,9 @@ func (m *fakeMedia) Close() {
 }
 
 // closed reports whether the service left the room.
+//
+// Returns:
+//   - true once the service has left the room
 func (m *fakeMedia) closed() bool {
 	select {
 	case <-m.done:
@@ -124,6 +184,9 @@ func (m *fakeMedia) closed() bool {
 }
 
 // phoneParticipant returns the participant that LiveKit SIP creates for a caller.
+//
+// Returns:
+//   - a SIP participant with the test call ID and phone numbers
 func phoneParticipant() *livekit.ParticipantInfo {
 	return &livekit.ParticipantInfo{
 		Identity: testPhone,
@@ -137,6 +200,14 @@ func phoneParticipant() *livekit.ParticipantInfo {
 }
 
 // testService returns a service that uses fake for requests and media for rooms.
+//
+// Parameters:
+//   - t: closes the server when the test ends
+//   - fake: answers the SIP and room requests
+//   - media: stands in for every room the service joins
+//
+// Returns:
+//   - a service that never contacts LiveKit
 func testService(t *testing.T, fake *fakeLiveKit, media *fakeMedia) *Service {
 	t.Helper()
 	fake.t = t
@@ -152,6 +223,13 @@ func testService(t *testing.T, fake *fakeLiveKit, media *fakeMedia) *Service {
 }
 
 // dial places a test call to +15550000003.
+//
+// Parameters:
+//   - service: the service that places the call
+//
+// Returns:
+//   - the answered call
+//   - the error from DialOutbound
 func dial(service *Service) (telephony.Call, error) {
 	return service.DialOutbound(context.Background(), telephony.OutboundRequest{
 		TrunkID:  "ST_test",

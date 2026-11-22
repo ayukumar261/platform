@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Constants
 const (
 	endpoint     = "wss://api.cartesia.ai/v1/agents/websocket/"
 	apiVersion   = "2026-08-14"
@@ -33,11 +34,20 @@ type Provider struct {
 }
 
 // New creates a provider without contacting Cartesia.
+//
+// Parameters:
+//   - apiKey: the Cartesia API key, sent when each session connects
+//
+// Returns:
+//   - a provider that starts sessions with saved Cartesia agents
 func New(apiKey string) *Provider {
 	return &Provider{apiKey: apiKey, endpoint: endpoint}
 }
 
 // Name returns "cartesia".
+//
+// Returns:
+//   - the provider's name
 func (*Provider) Name() string {
 	return "cartesia"
 }
@@ -147,6 +157,13 @@ func (s *session) handshake() error {
 }
 
 // SendAudio sends caller audio in the session's format.
+//
+// Parameters:
+//   - audio: the caller's audio, in the format given to NewSession
+//
+// Returns:
+//   - nil once the audio is written
+//   - an error if the write fails
 func (s *session) SendAudio(_ context.Context, audio []byte) error {
 	// Send the audio, which encoding/json writes as base64
 	return s.send(map[string]any{"type": "audio_input", "audio": audio})
@@ -174,6 +191,9 @@ func (s *session) send(message any) error {
 }
 
 // Events delivers the agent's events after Start succeeds.
+//
+// Returns:
+//   - a channel that closes when the session ends
 func (s *session) Events() <-chan agents.Event {
 	return s.events
 }

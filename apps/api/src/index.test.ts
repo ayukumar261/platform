@@ -5,6 +5,7 @@ import { test, type TestContext } from "node:test";
 import { createApp, loadConfiguration, type Configuration } from "./index.ts";
 import { ForbiddenError } from "./lib/errors/index.ts";
 
+// Constants
 const callId = "7f89fb58-646e-44f1-b91c-a430c06bc912";
 const configuration: Configuration = {
   port: 3000,
@@ -14,8 +15,19 @@ const configuration: Configuration = {
 const headers = {
   "Content-Type": "application/json",
 };
+const environment = {
+  API_PORT: "3000",
+  BRIDGE_API_TOKEN: "test-bridge-token",
+  BRIDGE_URL: "http://127.0.0.1:8080",
+};
 
-/** listen serves a test handler on an unused local port and closes it afterward. */
+/**
+ * listen serves a test handler on an unused local port.
+ *
+ * @param t - The test that closes the server when it ends.
+ * @param handler - Answers each request.
+ * @returns The server's base URL.
+ */
 async function listen(
   t: TestContext,
   handler: RequestListener,
@@ -34,7 +46,12 @@ async function listen(
   return `http://127.0.0.1:${address.port}`;
 }
 
-/** setup connects the real API and bridge client to a local bridge substitute. */
+/**
+ * setup connects the real API and bridge client to a local bridge substitute.
+ *
+ * @param t - The test that closes both servers when it ends.
+ * @returns The API's base URL, and the requests the substitute received.
+ */
 async function setup(t: TestContext) {
   const requests: {
     method?: string;
@@ -210,12 +227,6 @@ test("unexpected errors receive a generic 500 without leaking their details", as
     !JSON.stringify(logs.mock.calls[0]?.arguments).includes("private-secret"),
   );
 });
-
-const environment = {
-  API_PORT: "3000",
-  BRIDGE_API_TOKEN: "test-bridge-token",
-  BRIDGE_URL: "http://127.0.0.1:8080",
-};
 
 test("configuration uses the explicitly configured port", () => {
   assert.deepEqual(loadConfiguration(environment), {

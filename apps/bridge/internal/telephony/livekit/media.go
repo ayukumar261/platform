@@ -16,7 +16,7 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-// Audio Format
+// Constants
 const (
 	sampleRate = 16000
 	channels   = 1
@@ -175,6 +175,9 @@ func (c *connection) WriteAudio(_ context.Context, audio []byte) error {
 }
 
 // ClearAudio drops the agent's queued audio.
+//
+// Returns:
+//   - nil, always
 func (c *connection) ClearAudio(context.Context) error {
 	c.output.ClearQueue()
 	return nil
@@ -206,16 +209,29 @@ func (c *connection) DrainAudio(ctx context.Context) error {
 }
 
 // PressKey presses one key on the phone keypad.
+//
+// Parameters:
+//   - code: the key's DTMF code
+//   - digit: the key's character, such as "5" or "#"
+//
+// Returns:
+//   - an error if LiveKit cannot send the key
 func (c *connection) PressKey(code uint32, digit string) error {
 	return c.room.LocalParticipant.PublishDTMF(code, digit)
 }
 
 // Done closes once the call ends.
+//
+// Returns:
+//   - a channel that closes once the call ends
 func (c *connection) Done() <-chan struct{} {
 	return c.done
 }
 
-// Err returns why the call failed, or nil if it has not failed.
+// Err reports why the call failed.
+//
+// Returns:
+//   - the reason the call failed, or nil if it ended normally or has not ended
 func (c *connection) Err() error {
 	select {
 	case <-c.done:
@@ -270,6 +286,9 @@ func (input audioInput) WriteSample(sample media.PCM16Sample) error {
 }
 
 // Close does nothing, because ReadAudio stops when the call ends.
+//
+// Returns:
+//   - nil, always
 func (audioInput) Close() error {
 	return nil
 }

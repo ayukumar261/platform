@@ -42,6 +42,10 @@ var testConfiguration = Configuration{
 	BridgeAPIToken:          "test-bridge-token",
 }
 
+// setTestEnvironment sets every required variable from testConfiguration.
+//
+// Parameters:
+//   - t: restores the variables when the test ends
 func setTestEnvironment(t *testing.T) {
 	t.Helper()
 	t.Setenv("LIVEKIT_URL", testConfiguration.LiveKitURL)
@@ -56,6 +60,10 @@ func setTestEnvironment(t *testing.T) {
 	t.Setenv("BRIDGE_API_TOKEN", testConfiguration.BridgeAPIToken)
 }
 
+// clearTestEnvironment unsets every required variable.
+//
+// Parameters:
+//   - t: restores the variables when the test ends
 func clearTestEnvironment(t *testing.T) {
 	t.Helper()
 	for _, name := range requiredVariables {
@@ -355,6 +363,13 @@ func TestBridgeMainProcess(t *testing.T) {
 }
 
 // bridgeMainCommand prepares a process that runs main, and stops it when ctx ends.
+//
+// Parameters:
+//   - ctx: stops the process when it ends
+//   - t: provides an empty working directory, so no .env file is found
+//
+// Returns:
+//   - a command that reruns this test binary as the bridge
 func bridgeMainCommand(ctx context.Context, t *testing.T) *exec.Cmd {
 	t.Helper()
 	executable, err := os.Executable()
@@ -370,7 +385,14 @@ func bridgeMainCommand(ctx context.Context, t *testing.T) *exec.Cmd {
 	return command
 }
 
-// runBridgeMain runs main until it exits, and returns everything it logged.
+// runBridgeMain runs main until it exits.
+//
+// Parameters:
+//   - t: fails the test if main runs for more than ten seconds
+//
+// Returns:
+//   - everything main logged
+//   - the error from the process, such as a non-zero exit status
 func runBridgeMain(t *testing.T) ([]byte, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)

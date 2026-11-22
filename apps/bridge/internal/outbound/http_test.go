@@ -15,6 +15,12 @@ import (
 )
 
 // callRequest prepares a private request without contacting a carrier.
+//
+// Parameters:
+//   - body: the JSON request body
+//
+// Returns:
+//   - a POST /call request with the test token and a JSON content type
 func callRequest(body string) *http.Request {
 	request := httptest.NewRequest(http.MethodPost, "/call", strings.NewReader(body))
 	request.Header.Set("Authorization", "Bearer test-bridge-token")

@@ -6,7 +6,9 @@ import {
 } from "../../lib/errors/index.ts";
 import { parseCreateCallRequest } from "./schema.ts";
 
-const allowedPhoneNumber = "+19452412002";
+// Constants
+// TODO: Delete when Corbyn AI is live
+const ALLOWED_PHONE_NUMBER = "+19452412002";
 
 /**
  * createCall handles POST /call with { "to": "+19452412002" }.
@@ -45,7 +47,7 @@ export function createCall(bridge: Bridge): RequestHandler {
     const request = parseCreateCallRequest(req.body);
 
     // Limit test calls to the owner's phone
-    if (request.to !== allowedPhoneNumber) {
+    if (request.to !== ALLOWED_PHONE_NUMBER) {
       throw new ForbiddenError({
         code: "destination_not_allowed",
         message: "Calls are limited to the configured test number.",

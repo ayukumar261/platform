@@ -20,6 +20,14 @@ type fakeCall struct {
 	actions []string
 }
 
+// ReadAudio returns queued caller audio, or io.EOF once the call ends.
+//
+// Parameters:
+//   - ctx: stops waiting if it ends first
+//
+// Returns:
+//   - the next queued audio
+//   - io.EOF once the call ends, or ctx's error if it ends first
 func (c *fakeCall) ReadAudio(ctx context.Context) ([]byte, error) {
 	select {
 	case audio := <-c.audio:
@@ -31,35 +39,72 @@ func (c *fakeCall) ReadAudio(ctx context.Context) ([]byte, error) {
 	}
 }
 
+// WriteAudio records a write.
+//
+// Returns:
+//   - nil, always
 func (c *fakeCall) WriteAudio(context.Context, []byte) error {
 	c.actions = append(c.actions, "write")
 	return nil
 }
 
+// ClearAudio records a clear.
+//
+// Returns:
+//   - nil, always
 func (c *fakeCall) ClearAudio(context.Context) error {
 	c.actions = append(c.actions, "clear")
 	return nil
 }
 
+// DrainAudio records a drain.
+//
+// Returns:
+//   - nil, always
 func (c *fakeCall) DrainAudio(context.Context) error {
 	c.actions = append(c.actions, "drain")
 	return nil
 }
 
+// SendDTMF records the digits.
+//
+// Parameters:
+//   - digits: the keys to record
+//
+// Returns:
+//   - nil, always
 func (c *fakeCall) SendDTMF(_ context.Context, digits string) error {
 	c.actions = append(c.actions, "dtmf "+digits)
 	return nil
 }
 
+// End records the hangup and ends the call.
+//
+// Returns:
+//   - endErr, which is nil unless the test sets it
 func (c *fakeCall) End(context.Context) error {
 	c.actions = append(c.actions, "end")
 	c.hangUp()
 	return c.endErr
 }
 
-func (c *fakeCall) Info() telephony.Info  { return telephony.Info{} }
+// Info returns empty call details.
+//
+// Returns:
+//   - an empty Info
+func (c *fakeCall) Info() telephony.Info { return telephony.Info{} }
+
+// Done closes once the call ends.
+//
+// Returns:
+//   - a channel that closes once the call ends
 func (c *fakeCall) Done() <-chan struct{} { return c.done }
-func (c *fakeCall) Err() error            { return nil }
+
+// Err returns nil, because the fake call never fails.
+//
+// Returns:
+//   - nil, always
+func (c *fakeCall) Err() error { return nil }
 
 // hangUp ends the call, as the caller hanging up would.
 func (c *fakeCall) hangUp() {
@@ -77,9 +122,27 @@ type fakeSession struct {
 	closed   bool
 }
 
+// Start pretends to connect to the agent.
+//
+// Returns:
+//   - startErr, which is nil unless the test sets it
 func (s *fakeSession) Start(context.Context) error { return s.startErr }
+
+// Events delivers the queued agent events.
+//
+// Returns:
+//   - the channel of queued events
 func (s *fakeSession) Events() <-chan agents.Event { return s.events }
 
+// SendAudio passes the audio to sent, or stops when ctx ends.
+//
+// Parameters:
+//   - ctx: stops waiting if it ends first
+//   - audio: the audio to pass to sent
+//
+// Returns:
+//   - nil once sent receives the audio
+//   - ctx's error if it ends first
 func (s *fakeSession) SendAudio(ctx context.Context, audio []byte) error {
 	select {
 	case s.sent <- audio:
@@ -89,12 +152,23 @@ func (s *fakeSession) SendAudio(ctx context.Context, audio []byte) error {
 	}
 }
 
+// Close records that the session closed.
+//
+// Returns:
+//   - nil, always
 func (s *fakeSession) Close(context.Context) error {
 	s.closed = true
 	return nil
 }
 
 // fakes returns a call and a session with the given agent events queued.
+//
+// Parameters:
+//   - events: the events the session delivers, in order
+//
+// Returns:
+//   - a call that is still connected
+//   - a session with the events queued
 func fakes(events ...agents.Event) (*fakeCall, *fakeSession) {
 	call := &fakeCall{audio: make(chan []byte, 1), done: make(chan struct{})}
 	session := &fakeSession{events: make(chan agents.Event, len(events)), sent: make(chan []byte, 1)}

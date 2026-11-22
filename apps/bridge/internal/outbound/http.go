@@ -52,6 +52,10 @@ func NewHandler(running context.Context, token string, dial func(context.Context
 // Acceptance means that work was scheduled in this process, not that the phone
 // answered. A process restart loses this work. Each POST starts a new call;
 // callers must not automatically retry a request after an ambiguous timeout.
+//
+// Parameters:
+//   - w: receives HTTP 202 with the call ID, or an error envelope
+//   - r: an authenticated POST /call request
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Accept only call creation requests
 	if r.Method != http.MethodPost {
@@ -150,11 +154,22 @@ func (h *Handler) Shutdown() {
 }
 
 // writeError sends the same error envelope used by the Express API.
+//
+// Parameters:
+//   - w: receives the response
+//   - status: the HTTP status code
+//   - code: the machine-readable error code
+//   - message: the message for the caller
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
 
 // writeJSON sets the status and content type before encoding the response.
+//
+// Parameters:
+//   - w: receives the response
+//   - status: the HTTP status code
+//   - body: the value to encode as JSON
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

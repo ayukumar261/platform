@@ -8,15 +8,16 @@ import (
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
+// Constants
 const (
 	trunkName = "outbound"
+
+	// TODO: Remove for PostgreSQL-backed phone numbers
+	phoneNumber = "+17627013110"
 )
 
 // Carriers
 var carriers = []string{"telnyx", "twilio"}
-
-// TODO: Remove for PostgreSQL-backed phone numbers
-const phoneNumber = "+17627013110"
 
 // Setup makes sure LiveKit has an outbound trunk for each carrier.
 //

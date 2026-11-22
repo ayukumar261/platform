@@ -8,14 +8,15 @@ import (
 	lksdk "github.com/livekit/server-sdk-go/v2"
 )
 
+// Constants
 const (
 	trunkName        = "inbound"
 	dispatchRuleName = "inbound"
 	roomPrefix       = "call-"
-)
 
-// TODO: Remove for PostgreSQL-backed phone numbers
-const phoneNumber = "+17627013110"
+	// TODO: Remove for PostgreSQL-backed phone numbers
+	phoneNumber = "+17627013110"
+)
 
 // Setup makes sure LiveKit accepts calls to phoneNumber and places each one
 // in its own room.

@@ -24,6 +24,14 @@ type fakeLiveKit struct {
 	calls  []string
 }
 
+// ServeHTTP answers the SIP API requests that Setup makes, like LiveKit does.
+//
+// It records each method in calls, and returns 404 for any other method or an
+// unknown trunk.
+//
+// Parameters:
+//   - w: receives the encoded response
+//   - r: the SIP API request
 func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := strings.TrimPrefix(r.URL.Path, "/twirp/livekit.SIP/")
 	f.calls = append(f.calls, method)
@@ -75,6 +83,12 @@ func (f *fakeLiveKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // existingTrunks returns a trunk for every carrier with the given address.
+//
+// Parameters:
+//   - address: the Kamailio address on each trunk
+//
+// Returns:
+//   - one trunk per carrier, as LiveKit lists them
 func existingTrunks(address string) []*livekit.SIPOutboundTrunkInfo {
 	var trunks []*livekit.SIPOutboundTrunkInfo
 	for _, carrier := range carriers {
@@ -87,6 +101,15 @@ func existingTrunks(address string) []*livekit.SIPOutboundTrunkInfo {
 	return trunks
 }
 
+// setup runs Setup against fake with testKamailioAddress.
+//
+// Parameters:
+//   - t: closes the server when the test ends
+//   - fake: answers the SIP API requests
+//
+// Returns:
+//   - each carrier's trunk ID, from Setup
+//   - the error from Setup
 func setup(t *testing.T, fake *fakeLiveKit) (map[string]string, error) {
 	t.Helper()
 	fake.t = t

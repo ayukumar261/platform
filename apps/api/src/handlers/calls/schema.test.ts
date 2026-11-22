@@ -3,7 +3,12 @@ import { test } from "node:test";
 import { BadRequestError } from "../../lib/errors/index.ts";
 import { parseCreateCallRequest } from "./schema.ts";
 
-/** Check the error class and code produced for an invalid request body. */
+/**
+ * expectBadRequest checks that parsing body fails with a BadRequestError.
+ *
+ * @param body - The invalid request body.
+ * @param code - The error code the body should produce.
+ */
 function expectBadRequest(body: unknown, code: string): void {
   assert.throws(
     () => parseCreateCallRequest(body),

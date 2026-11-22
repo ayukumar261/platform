@@ -8,7 +8,13 @@ import {
   ServiceUnavailableError,
 } from "../lib/errors/index.ts";
 
-/** serve runs a bridge substitute that cannot contact a phone carrier. */
+/**
+ * serve runs a bridge substitute that cannot contact a phone carrier.
+ *
+ * @param t - The test that closes the server when it ends.
+ * @param handler - Answers each request in place of the bridge.
+ * @returns The substitute's base URL.
+ */
 async function serve(
   t: TestContext,
   handler: RequestListener,

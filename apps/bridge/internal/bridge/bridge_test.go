@@ -104,18 +104,49 @@ type testCalls struct {
 	attach func(context.Context, telephony.InboundRequest) (telephony.Call, error)
 }
 
+// DialOutbound passes the request to dial.
+//
+// Parameters:
+//   - ctx: passed to dial
+//   - request: passed to dial
+//
+// Returns:
+//   - the call from dial
+//   - the error from dial
 func (s testCalls) DialOutbound(ctx context.Context, request telephony.OutboundRequest) (telephony.Call, error) {
 	return s.dial(ctx, request)
 }
 
+// AttachInbound passes the request to attach.
+//
+// Parameters:
+//   - ctx: passed to attach
+//   - request: passed to attach
+//
+// Returns:
+//   - the call from attach
+//   - the error from attach
 func (s testCalls) AttachInbound(ctx context.Context, request telephony.InboundRequest) (telephony.Call, error) {
 	return s.attach(ctx, request)
 }
 
 type testAgent func(context.Context, agents.SessionConfig) (agents.Session, error)
 
+// Name returns "test".
+//
+// Returns:
+//   - the provider's name
 func (testAgent) Name() string { return "test" }
 
+// NewSession passes the config to the test function.
+//
+// Parameters:
+//   - ctx: passed to the test function
+//   - config: passed to the test function
+//
+// Returns:
+//   - the session from the test function
+//   - the error from the test function
 func (f testAgent) NewSession(ctx context.Context, config agents.SessionConfig) (agents.Session, error) {
 	return f(ctx, config)
 }
@@ -125,6 +156,13 @@ type testCall struct {
 	end func(context.Context) error
 }
 
+// End passes the context to end.
+//
+// Parameters:
+//   - ctx: passed to end
+//
+// Returns:
+//   - the error from end
 func (c testCall) End(ctx context.Context) error {
 	return c.end(ctx)
 }

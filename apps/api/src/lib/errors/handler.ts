@@ -45,6 +45,10 @@ function requestError(error: unknown): HttpError | undefined {
  * Register it after the routes. Express recognizes error middleware by its
  * four arguments, including next. Only our explicit HTTP errors expose their
  * messages; unexpected failures receive a generic HTTP 500 response.
+ *
+ * @param error - The failure thrown by a route or by body parsing.
+ * @param res - Receives the JSON error envelope.
+ * @param next - Passes the failure to Express if a response has already started.
  */
 export const errorHandler: ErrorRequestHandler = (
   error: unknown,

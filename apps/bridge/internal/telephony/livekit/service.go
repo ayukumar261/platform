@@ -15,7 +15,7 @@ import (
 	"github.com/twitchtv/twirp"
 )
 
-// Keypad
+// Constants
 const keypad = "0123456789*#ABCD"
 
 type transport interface {
@@ -34,6 +34,14 @@ type Service struct {
 }
 
 // New creates a service without contacting the LiveKit server.
+//
+// Parameters:
+//   - url: the LiveKit server URL
+//   - apiKey: identifies the bridge to LiveKit
+//   - apiSecret: signs the access tokens for each request and room
+//
+// Returns:
+//   - a service that dials outbound calls and attaches to inbound calls
 func New(url, apiKey, apiSecret string) *Service {
 	return &Service{
 		sip:   lksdk.NewSIPClient(url, apiKey, apiSecret),
@@ -151,6 +159,9 @@ type call struct {
 }
 
 // Info describes the call.
+//
+// Returns:
+//   - the call's ID, direction, numbers, room, and phone participant
 func (c *call) Info() telephony.Info {
 	return c.info
 }
